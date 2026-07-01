@@ -1,5 +1,5 @@
 {
-  "name": "bizscout-takehome",
+  "name": "endpoint-observer",
   "private": true,
   "version": "1.0.0",
   "description": "HTTP response monitor with real-time dashboard and LLM-powered insights (BizScout take-home)",

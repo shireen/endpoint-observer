@@ -21,7 +21,7 @@ export default function App() {
       <header className="border-b border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">HTTP Response Monitor</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Endpoint Observer</h1>
             <p className="text-xs text-slate-400">
               pings <code className="text-slate-300">httpbin.org/anything</code> every 5 minutes
             </p>

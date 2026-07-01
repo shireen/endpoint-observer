@@ -1,6 +1,6 @@
-# HTTP Response Monitor
+# Endpoint Observer
 
-Full-stack take-home for the BizScout engineering team: a service that pings `httpbin.org/anything` every 5 minutes with a randomized JSON payload, stores every outcome, and streams it live to a dashboard — plus the **Option B AI enhancement** (natural-language chat over the monitoring data and automatic LLM incident reports, wrapped in strict cost controls).
+Synthetic monitoring for an HTTP endpoint, built as the full-stack take-home for the BizScout engineering team: a service that pings `httpbin.org/anything` every 5 minutes with a randomized JSON payload, stores every outcome, and streams it live to a dashboard — plus the **Option B AI enhancement** (natural-language chat over the monitoring data and automatic LLM incident reports, wrapped in strict cost controls).
 
 ## Quick start
 
