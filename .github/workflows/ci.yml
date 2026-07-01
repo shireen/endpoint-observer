@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          echo "## Test coverage" >> "$GITHUB_STEP_SUMMARY"
+          for pkg in server web; do
+            if [ -f "$pkg/coverage/lcov.info" ]; then
+              lines_found=$(grep -h '^LF:' "$pkg/coverage/lcov.info" | cut -d: -f2 | paste -sd+ - | bc)
+              lines_hit=$(grep -h '^LH:' "$pkg/coverage/lcov.info" | cut -d: -f2 | paste -sd+ - | bc)
+              pct=$(awk "BEGIN {printf \"%.1f\", ($lines_hit/$lines_found)*100}")
+              echo "- **$pkg**: ${pct}% line coverage (${lines_hit}/${lines_found})" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            server/coverage
+            web/coverage
+          if-no-files-found: ignore

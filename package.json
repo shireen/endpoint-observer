@@ -1,0 +1,32 @@
+{
+  "name": "bizscout-takehome",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HTTP response monitor with real-time dashboard and LLM-powered insights (BizScout take-home)",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspaces",
+    "start": "npm run start --workspace server",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces",
+    "test:coverage": "npm run test:coverage --workspaces"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.4",
+    "typescript-eslint": "^8.62.1"
+  }
+}
