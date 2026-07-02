@@ -10,12 +10,19 @@ import { fallbackChatAnswer, fallbackIncidentAnalysis } from './fallback.js';
 
 const CHAT_SYSTEM_PROMPT = `You are the monitoring assistant for an HTTP response monitor that pings httpbin.org/anything every 5 minutes and records status, latency, and payload data.
 
-Answer questions about the monitoring data using the provided tools — never guess numbers; always fetch them. Be concise and conversational. Report latencies in milliseconds and times in a human-readable form. If the data is insufficient to answer, say so plainly.`;
+Answer questions about the monitoring data using the provided tools — never guess numbers; always fetch them. For questions about a specific time ("at 2pm", "this morning"), use get_responses_in_range with a window around that time so you can see the spike and its surroundings. For questions about payload contents or patterns, use analyze_payload_patterns and summarize the findings in plain language. Be concise and conversational. Report latencies in milliseconds and times in a human-readable form. If the data is insufficient to answer, say so plainly.`;
 
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_INPUT_TOKENS = 20_000; // guardrail: refuse absurdly large prompts before spending
 const CHAT_MAX_TOKENS = 1024;
 const INCIDENT_MAX_TOKENS = 700;
+
+/** Thrown when the hourly budget is exhausted before the first API call. */
+class QuotaExceededError extends Error {
+  constructor() {
+    super('LLM hourly call budget exhausted');
+  }
+}
 
 export interface ChatResult {
   text: string;
@@ -89,8 +96,16 @@ export class InsightsService {
       if (history.length === 0) this.cache.set(message, text);
       return { text, source: 'llm' };
     } catch (err) {
-      this.deps.logger.error({ err }, 'llm chat failed, serving fallback');
-      const text = fallbackChatAnswer(this.deps.responses, this.deps.incidents, { error: true });
+      // canCall() above is only a fast-path peek — the authoritative gate is
+      // tryReserve() inside the loop, which can lose the slot to a concurrent
+      // request. That surfaces here as a quota fallback, not an error.
+      const quota = err instanceof QuotaExceededError;
+      if (!quota) this.deps.logger.error({ err }, 'llm chat failed, serving fallback');
+      const text = fallbackChatAnswer(
+        this.deps.responses,
+        this.deps.incidents,
+        quota ? { quotaExceeded: true } : { error: true },
+      );
       onText?.(text);
       return { text, source: 'fallback' };
     }
@@ -107,21 +122,30 @@ export class InsightsService {
       { role: 'user' as const, content: message },
     ];
 
-    // Token counting before the call (free endpoint) — both a cost guardrail
-    // and the basis for the pre-call estimate the assignment asks for.
-    const count = await client.messages.countTokens({
-      model: this.model,
-      system: CHAT_SYSTEM_PROMPT,
-      tools: CHAT_TOOLS,
-      messages,
-    });
-    if (count.input_tokens > MAX_INPUT_TOKENS) {
-      throw new Error(`Prompt too large (${count.input_tokens} tokens)`);
-    }
-
     let finalText = '';
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      if (!this.costs.canCall()) break; // quota can run out mid-loop
+      // Reserve a budget slot BEFORE the API call (synchronous, so concurrent
+      // requests cannot overshoot the hourly cap). Losing the slot before the
+      // first call means quota; mid-conversation we return what we have.
+      const reservation = this.costs.tryReserve('chat', this.model);
+      if (reservation === null) {
+        if (iteration === 0) throw new QuotaExceededError();
+        break;
+      }
+
+      // Token counting before every Messages request (the count endpoint is
+      // free) — the prompt grows each iteration as tool results are appended,
+      // so re-check the guardrail per call, not just once per chat.
+      const count = await client.messages.countTokens({
+        model: this.model,
+        system: CHAT_SYSTEM_PROMPT,
+        tools: CHAT_TOOLS,
+        messages,
+      });
+      if (count.input_tokens > MAX_INPUT_TOKENS) {
+        if (iteration === 0) throw new Error(`Prompt too large (${count.input_tokens} tokens)`);
+        break; // mid-loop: stop spending, return the text accumulated so far
+      }
 
       const stream = client.messages.stream({
         model: this.model,
@@ -133,8 +157,8 @@ export class InsightsService {
       if (onText) stream.on('text', onText);
       const response = await stream.finalMessage();
 
-      this.costs.record(
-        'chat',
+      this.costs.settle(
+        reservation,
         this.model,
         response.usage.input_tokens,
         response.usage.output_tokens,
@@ -193,35 +217,49 @@ export class InsightsService {
     const stats = this.deps.responses.stats(24);
     const recentFailures = this.deps.responses.list({ limit: 5, hours: 24, status: 'failed' });
 
+    // Same discipline as chat: reserve a budget slot before the call, and
+    // token-count before spending (incident prompts are small, but the
+    // guardrail is uniform across every Messages request).
+    const reservation = this.costs.tryReserve('incident', this.model);
+    if (reservation === null) throw new QuotaExceededError();
+
+    const system =
+      'You write terse incident reports for an HTTP monitoring system. Output markdown with exactly two sections: "## Potential root causes" (3-4 bullets, most likely first) and "## Recommendations" (2-3 actionable bullets). No preamble.';
+    const messages: Anthropic.MessageParam[] = [
+      {
+        role: 'user',
+        content: JSON.stringify({
+          incident: {
+            at: new Date(incident.createdAt).toISOString(),
+            endpoint: incident.endpoint,
+            severity: incident.severity,
+            latency_ms: incident.latencyMs,
+            baseline_24h_avg_ms: Math.round(incident.baselineMs),
+          },
+          last_24h_stats: stats,
+          recent_failures: recentFailures.map((r) => ({
+            at: new Date(r.createdAt).toISOString(),
+            status: r.statusCode,
+            error: r.error,
+          })),
+        }),
+      },
+    ];
+
+    const count = await client.messages.countTokens({ model: this.model, system, messages });
+    if (count.input_tokens > MAX_INPUT_TOKENS) {
+      throw new Error(`Incident prompt too large (${count.input_tokens} tokens)`);
+    }
+
     const response = await client.messages.create({
       model: this.model,
       max_tokens: INCIDENT_MAX_TOKENS,
-      system:
-        'You write terse incident reports for an HTTP monitoring system. Output markdown with exactly two sections: "## Potential root causes" (3-4 bullets, most likely first) and "## Recommendations" (2-3 actionable bullets). No preamble.',
-      messages: [
-        {
-          role: 'user',
-          content: JSON.stringify({
-            incident: {
-              at: new Date(incident.createdAt).toISOString(),
-              endpoint: incident.endpoint,
-              severity: incident.severity,
-              latency_ms: incident.latencyMs,
-              baseline_24h_avg_ms: Math.round(incident.baselineMs),
-            },
-            last_24h_stats: stats,
-            recent_failures: recentFailures.map((r) => ({
-              at: new Date(r.createdAt).toISOString(),
-              status: r.statusCode,
-              error: r.error,
-            })),
-          }),
-        },
-      ],
+      system,
+      messages,
     });
 
-    this.costs.record(
-      'incident',
+    this.costs.settle(
+      reservation,
       this.model,
       response.usage.input_tokens,
       response.usage.output_tokens,

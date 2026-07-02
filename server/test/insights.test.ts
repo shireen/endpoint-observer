@@ -80,7 +80,8 @@ describe('InsightsService.chat', () => {
 
     expect(result.source).toBe('llm');
     expect(result.text).toBe('All good: 5 checks passed.');
-    expect(countTokens).toHaveBeenCalledOnce();
+    // Token counting runs before EVERY Messages request, not once per chat.
+    expect(countTokens).toHaveBeenCalledTimes(2);
     expect(stream).toHaveBeenCalledTimes(2);
     // The tool result was fed back in the second request.
     const secondCall = stream.mock.calls[1]![0];
@@ -121,6 +122,37 @@ describe('InsightsService.chat', () => {
     expect(first.source).toBe('llm');
     expect(second.source).toBe('fallback');
     expect(second.text).toContain('hourly AI budget');
+  });
+
+  it('enforces the cap under concurrent requests (reservation is atomic)', async () => {
+    // 25 chats race a cap of 20. Before the reserve→settle fix, every request
+    // passed canCall() before any usage was recorded, so all 25 would spend.
+    const answer = makeMessage({
+      content: [{ type: 'text', text: 'answer', citations: null }] as Anthropic.ContentBlock[],
+    });
+    let call = 0;
+    const client = {
+      messages: {
+        countTokens: async () => ({ input_tokens: 100 }),
+        create: async () => answer,
+        stream: () => ({
+          on: vi.fn().mockReturnThis(),
+          finalMessage: () =>
+            new Promise((resolve) => setTimeout(() => resolve({ ...answer, id: `msg_${call++}` }))),
+        }),
+      },
+    } as unknown as Anthropic;
+    const { insights, llmUsage } = service(client, 20);
+
+    const results = await Promise.all(
+      Array.from({ length: 25 }, (_, i) => insights.chat({ message: `question number ${i}` })),
+    );
+
+    expect(llmUsage.summary().totalCalls).toBe(20); // never overshoots the cap
+    expect(results.filter((r) => r.source === 'llm')).toHaveLength(20);
+    const fallbacks = results.filter((r) => r.source === 'fallback');
+    expect(fallbacks).toHaveLength(5);
+    expect(fallbacks[0]!.text).toContain('hourly AI budget');
   });
 
   it('falls back when the API errors instead of throwing', async () => {

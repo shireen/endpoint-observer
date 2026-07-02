@@ -13,14 +13,23 @@ describe('CostController', () => {
     return { costs: new CostController(llmUsage, limit), llmUsage };
   }
 
-  it('allows calls until the hourly limit is reached', () => {
+  it('hands out reservations until the hourly limit, then refuses', () => {
     const { costs } = controller(3);
     expect(costs.canCall()).toBe(true);
 
-    for (let i = 0; i < 3; i++) costs.record('chat', 'claude-haiku-4-5', 100, 50);
+    const ids = [1, 2, 3].map(() => costs.tryReserve('chat', 'claude-haiku-4-5'));
+    expect(ids.every((id) => typeof id === 'number')).toBe(true);
 
+    expect(costs.tryReserve('chat', 'claude-haiku-4-5')).toBeNull();
     expect(costs.canCall()).toBe(false);
     expect(costs.remainingCalls()).toBe(0);
+  });
+
+  it('counts unsettled reservations toward the budget (reserve happens before the API call)', () => {
+    const { costs, llmUsage } = controller(2);
+    costs.tryReserve('chat', 'claude-haiku-4-5'); // never settled — e.g. call in flight or failed
+    expect(costs.remainingCalls()).toBe(1);
+    expect(llmUsage.summary().totalCalls).toBe(1);
   });
 
   it('only counts calls within the rolling hour', () => {
@@ -46,12 +55,16 @@ describe('CostController', () => {
     expect(costs.remainingCalls()).toBe(2);
   });
 
-  it('records usage with a cost estimate', () => {
+  it('settles a reservation with real tokens and a cost estimate', () => {
     const { costs, llmUsage } = controller(5);
-    costs.record('chat', 'claude-haiku-4-5', 1_000_000, 1_000_000);
+    const id = costs.tryReserve('chat', 'claude-haiku-4-5')!;
+    expect(llmUsage.summary().totalEstimatedCostUsd).toBe(0); // placeholder until settled
+
+    costs.settle(id, 'claude-haiku-4-5', 1_000_000, 1_000_000);
 
     const summary = llmUsage.summary();
     expect(summary.totalCalls).toBe(1);
+    expect(summary.totalInputTokens).toBe(1_000_000);
     expect(summary.totalEstimatedCostUsd).toBeCloseTo(6.0); // $1 in + $5 out per MTok
   });
 });

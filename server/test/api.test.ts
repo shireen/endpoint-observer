@@ -122,6 +122,30 @@ describe('REST API', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST /api/chat throttles a single IP but not others', async () => {
+    // 10 requests/minute/IP; the 11th from the same IP gets 429.
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app)
+        .post('/api/chat')
+        .set('X-Forwarded-For', '203.0.113.7')
+        .send({ message: `question ${i}` });
+      expect(res.status).toBe(200);
+    }
+    const throttled = await request(app)
+      .post('/api/chat')
+      .set('X-Forwarded-For', '203.0.113.7')
+      .send({ message: 'one too many' });
+    expect(throttled.status).toBe(429);
+    expect(throttled.body.error).toContain('Too many');
+
+    // A different client is unaffected.
+    const other = await request(app)
+      .post('/api/chat')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .send({ message: 'different client' });
+    expect(other.status).toBe(200);
+  });
+
   it('unknown /api routes return JSON 404', async () => {
     const res = await request(app).get('/api/nope');
     expect(res.status).toBe(404);

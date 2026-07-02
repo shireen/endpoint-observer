@@ -31,6 +31,9 @@ export interface ListOptions {
   before?: number;
   /** Only rows from the last N hours. */
   hours?: number;
+  /** Explicit time bounds (epoch ms, inclusive) — for "around 2pm" queries. */
+  from?: number;
+  to?: number;
   /** Filter by outcome. */
   status?: 'ok' | 'failed';
 }
@@ -103,6 +106,14 @@ export function createResponsesRepo(db: Db) {
       if (options.hours !== undefined) {
         clauses.push('created_at >= @since');
         params.since = Date.now() - options.hours * 3_600_000;
+      }
+      if (options.from !== undefined) {
+        clauses.push('created_at >= @from');
+        params.from = options.from;
+      }
+      if (options.to !== undefined) {
+        clauses.push('created_at <= @to');
+        params.to = options.to;
       }
       if (options.status) {
         clauses.push('ok = @ok');

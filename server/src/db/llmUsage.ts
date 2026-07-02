@@ -29,6 +29,29 @@ export function createLlmUsageRepo(db: Db) {
       insertStmt.run(data);
     },
 
+    /**
+     * Inserts a zero-token placeholder row that immediately counts toward the
+     * rolling-hour budget; returns its id so the caller can settle it with
+     * real token counts after the API responds.
+     */
+    reserve(kind: 'chat' | 'incident', model: string, createdAt: number): number {
+      const result = insertStmt.run({
+        createdAt,
+        kind,
+        model,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCostUsd: 0,
+      });
+      return Number(result.lastInsertRowid);
+    },
+
+    settle(id: number, inputTokens: number, outputTokens: number, estimatedCostUsd: number): void {
+      db.prepare(
+        'UPDATE llm_usage SET input_tokens = ?, output_tokens = ?, estimated_cost_usd = ? WHERE id = ?',
+      ).run(inputTokens, outputTokens, estimatedCostUsd, id);
+    },
+
     callsSince(sinceMs: number): number {
       const row = db
         .prepare('SELECT COUNT(*) AS count FROM llm_usage WHERE created_at >= ?')

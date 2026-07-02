@@ -12,6 +12,13 @@ import { estimateCostUsd } from './pricing.js';
  *   cost zero.
  * - Usage tracking: every call records tokens + estimated cost for the
  *   dashboard cost panel.
+ *
+ * The cap is enforced with a reserve → settle pattern: tryReserve() counts
+ * calls in the rolling hour and inserts a placeholder usage row in the same
+ * synchronous tick. Node is single-threaded and better-sqlite3 is synchronous,
+ * so no interleaving is possible between the check and the insert — concurrent
+ * requests cannot all pass the check and overshoot the cap (they could when
+ * usage was only recorded after the awaited API call returned).
  */
 export class CostController {
   constructor(
@@ -19,6 +26,7 @@ export class CostController {
     private callsPerHour: number,
   ) {}
 
+  /** Read-only peek (usage endpoint, fast-path fallback). Not a gate. */
   canCall(): boolean {
     return this.usage.callsSince(Date.now() - 3_600_000) < this.callsPerHour;
   }
@@ -27,20 +35,24 @@ export class CostController {
     return Math.max(0, this.callsPerHour - this.usage.callsSince(Date.now() - 3_600_000));
   }
 
-  record(
-    kind: 'chat' | 'incident',
-    model: string,
-    inputTokens: number,
-    outputTokens: number,
-  ): void {
-    this.usage.record({
-      createdAt: Date.now(),
-      kind,
-      model,
+  /**
+   * Atomically claims one budget slot BEFORE the API call is made. Returns the
+   * reservation id to settle() with real token counts, or null when the hourly
+   * budget is exhausted. Must be called before any `await` on the request
+   * path. A failed API call keeps its reservation — the attempt was made.
+   */
+  tryReserve(kind: 'chat' | 'incident', model: string): number | null {
+    if (this.usage.callsSince(Date.now() - 3_600_000) >= this.callsPerHour) return null;
+    return this.usage.reserve(kind, model, Date.now());
+  }
+
+  settle(id: number, model: string, inputTokens: number, outputTokens: number): void {
+    this.usage.settle(
+      id,
       inputTokens,
       outputTokens,
-      estimatedCostUsd: estimateCostUsd(model, inputTokens, outputTokens),
-    });
+      estimateCostUsd(model, inputTokens, outputTokens),
+    );
   }
 }
 

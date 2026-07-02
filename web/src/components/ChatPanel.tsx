@@ -7,7 +7,7 @@ import { Markdown } from './Markdown';
 const SUGGESTIONS = [
   'What were the slowest response times today?',
   'Summarize any issues in the last 24 hours',
-  'How is the success rate looking?',
+  'What patterns are in the response payloads?',
 ];
 
 const SOURCE_LABEL: Record<NonNullable<ChatMessage['source']>, string> = {

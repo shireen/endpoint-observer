@@ -26,6 +26,37 @@ class HttpError extends Error {
   }
 }
 
+// /api/chat is public and does real work even in fallback mode, so it gets a
+// per-IP fixed-window throttle in front of the LLM budget. Hand-rolled (~20
+// lines) rather than a dependency, matching the repo's dependency philosophy.
+const CHAT_THROTTLE_LIMIT = 10; // requests per window per IP
+const CHAT_THROTTLE_WINDOW_MS = 60_000;
+const CHAT_THROTTLE_MAX_IPS = 10_000; // hard bound on tracker memory
+
+function chatThrottle() {
+  const windows = new Map<string, { count: number; resetAt: number }>();
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    if (windows.size >= CHAT_THROTTLE_MAX_IPS) {
+      for (const [ip, w] of windows) if (w.resetAt <= now) windows.delete(ip);
+      if (windows.size >= CHAT_THROTTLE_MAX_IPS) windows.clear(); // refuse to grow unbounded
+    }
+    const key = req.ip ?? 'unknown';
+    const w = windows.get(key);
+    if (!w || w.resetAt <= now) {
+      windows.set(key, { count: 1, resetAt: now + CHAT_THROTTLE_WINDOW_MS });
+      next();
+      return;
+    }
+    if (w.count >= CHAT_THROTTLE_LIMIT) {
+      res.status(429).json({ error: 'Too many chat requests — try again in a minute' });
+      return;
+    }
+    w.count += 1;
+    next();
+  };
+}
+
 function intQuery(req: Request, name: string, fallback: number, max: number): number {
   const raw = req.query[name];
   if (raw === undefined) return fallback;
@@ -43,6 +74,8 @@ function optionalIntQuery(req: Request, name: string, max: number): number | und
 
 export function createApp(ctx: AppContext): express.Express {
   const app = express();
+  // Railway terminates TLS at its proxy; trust it so req.ip is the client.
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '100kb' }));
 
   app.get('/health', (_req, res) => {
@@ -103,7 +136,7 @@ export function createApp(ctx: AppContext): express.Express {
   });
 
   // Chat endpoint: streams the answer back as SSE frames.
-  app.post('/api/chat', async (req, res) => {
+  app.post('/api/chat', chatThrottle(), async (req, res) => {
     const { message, history } = req.body as {
       message?: unknown;
       history?: { role: 'user' | 'assistant'; content: string }[];
