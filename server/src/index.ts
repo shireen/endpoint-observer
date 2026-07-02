@@ -68,14 +68,27 @@ const server = app.listen(config.port, () => {
   logger.info({ port: config.port }, 'server listening');
 });
 
+let shuttingDown = false;
 function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info({ signal }, 'shutting down');
   void task.stop();
   hub.close();
-  server.close(() => {
-    db.close();
+  const done = () => {
+    try {
+      db.close();
+    } catch {
+      // already closed
+    }
     process.exit(0);
-  });
+  };
+  server.close(done);
+  // SSE + idle keep-alive connections keep server.close() pending; force them
+  // shut so the process exits promptly. Otherwise the platform SIGKILLs us on
+  // redeploy, which is reported as a crash.
+  server.closeAllConnections?.();
+  setTimeout(done, 5_000).unref();
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));

@@ -21,9 +21,7 @@ export class SseHub {
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    res.write(': connected\n\n');
     this.clients.add(res);
-    this.logger?.debug({ clients: this.clients.size }, 'sse client connected');
 
     // Keep intermediary proxies from closing idle connections.
     if (!this.heartbeat) {
@@ -31,22 +29,44 @@ export class SseHub {
       this.heartbeat.unref();
     }
 
-    res.on('close', () => {
-      this.clients.delete(res);
-      this.logger?.debug({ clients: this.clients.size }, 'sse client disconnected');
-    });
-  }
+    const remove = () => {
+      if (this.clients.delete(res)) {
+        this.logger?.debug({ clients: this.clients.size }, 'sse client disconnected');
+      }
+    };
+    res.on('close', remove);
+    // An unclean client disconnect (ECONNRESET/EPIPE) emits an 'error' on the
+    // response stream. Without this listener that becomes an unhandled 'error'
+    // event and crashes the whole process — so always handle it.
+    res.on('error', remove);
 
-  broadcast(event: string, data: unknown): void {
-    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const client of this.clients) {
-      client.write(frame);
+    try {
+      res.write(': connected\n\n');
+      this.logger?.debug({ clients: this.clients.size }, 'sse client connected');
+    } catch (err) {
+      this.logger?.debug({ err }, 'sse client failed on connect');
+      remove();
     }
   }
 
+  broadcast(event: string, data: unknown): void {
+    this.writeAll(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
   private ping(): void {
+    this.writeAll(': heartbeat\n\n');
+  }
+
+  /** Writes to every client, dropping any that fail rather than throwing. */
+  private writeAll(frame: string): void {
     for (const client of this.clients) {
-      client.write(': heartbeat\n\n');
+      try {
+        client.write(frame);
+      } catch (err) {
+        // Client vanished between its disconnect event and this write.
+        this.clients.delete(client);
+        this.logger?.debug({ err }, 'dropped unwritable sse client');
+      }
     }
   }
 
