@@ -16,6 +16,8 @@ interface ModelPricing {
 
 const PRICING: Record<string, ModelPricing> = {
   'claude-haiku-4-5': { inputPerMTok: 1.0, outputPerMTok: 5.0 },
+  // Sonnet 5 is billed at introductory $2/$10 through 2026-08-31; we estimate
+  // at the standard list price deliberately so estimates never under-report.
   'claude-sonnet-5': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
   'claude-opus-4-8': { inputPerMTok: 5.0, outputPerMTok: 25.0 },
 };
