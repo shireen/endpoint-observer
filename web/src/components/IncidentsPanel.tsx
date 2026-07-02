@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchIncidents } from '../lib/api';
 import { formatTime } from '../lib/api';
 import type { Incident } from '../types';
+import { Markdown } from './Markdown';
 
 function SeverityBadge({ severity }: { severity: Incident['severity'] }) {
   const style = severity === 'critical' ? 'bg-danger/10 text-danger' : 'bg-gold/20 text-gold-deep';
@@ -20,9 +21,9 @@ function AnalysisBlock({ incident }: { incident: Incident }) {
   }
   return (
     <div>
-      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink/80">
-        {incident.analysis}
-      </pre>
+      <div className="text-ink/80">
+        <Markdown>{incident.analysis ?? ''}</Markdown>
+      </div>
       <p className="mt-3 font-display text-[10px] uppercase tracking-widest text-muted">
         {incident.analysisSource === 'llm' ? 'AI-generated analysis' : 'Automatic analysis'}
       </p>

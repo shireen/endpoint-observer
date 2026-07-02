@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { sendChat } from '../lib/api';
 import type { ChatMessage } from '../types';
+import { Markdown } from './Markdown';
 
 const SUGGESTIONS = [
   'What were the slowest response times today?',
@@ -97,9 +98,17 @@ export function ChatPanel() {
                   : 'border border-line bg-paper text-ink'
               }`}
             >
-              <pre className="whitespace-pre-wrap font-sans">
-                {message.content || (busy && i === messages.length - 1 ? 'Thinking…' : '')}
-              </pre>
+              {message.role === 'assistant' ? (
+                message.content ? (
+                  <Markdown>{message.content}</Markdown>
+                ) : (
+                  <span className="text-muted">
+                    {busy && i === messages.length - 1 ? 'Thinking…' : ''}
+                  </span>
+                )
+              ) : (
+                <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
+              )}
               {message.source && (
                 <p
                   className={`mt-1.5 font-display text-[10px] uppercase tracking-widest ${
