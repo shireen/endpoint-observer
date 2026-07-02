@@ -14,7 +14,7 @@ npm test             # all suites (server 51 + web 20, vitest)
 npm run lint         # eslint + prettier check (both enforced in CI)
 npm run typecheck    # tsc across both workspaces
 npm run build        # server → server/dist, web → web/dist
-npm start            # runs node directly (see "Signals" below)
+npm start            # runs node directly (see Railway section: SIGTERM handling)
 ```
 
 npm workspaces monorepo: `server/` (Express 5 + TS + better-sqlite3 + node-cron + SSE + `@anthropic-ai/sdk`), `web/` (React 19 + Vite + Tailwind 4 + TanStack Query). In production the server serves `web/dist` — one deploy unit.
