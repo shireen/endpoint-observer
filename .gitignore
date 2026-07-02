@@ -11,3 +11,6 @@ data/
 *.db
 .DS_Store
 *.log
+
+# Private interview prep — never commit
+INTERVIEW_NOTES.md
