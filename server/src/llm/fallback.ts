@@ -1,5 +1,6 @@
 import type { ResponsesRepo } from '../db/responses.js';
 import type { IncidentsRepo, IncidentRecord } from '../db/incidents.js';
+import { formatLatency } from '../format.js';
 
 /**
  * Deterministic (zero-cost) degradation paths for when the LLM is
@@ -28,7 +29,7 @@ export function fallbackChatAnswer(
   ];
   if (stats.avgLatencyMs !== null) {
     lines.push(
-      `**Latency:** avg ${Math.round(stats.avgLatencyMs)}ms, min ${stats.minLatencyMs}ms, max ${stats.maxLatencyMs}ms, p95 ${stats.p95LatencyMs}ms.`,
+      `**Latency:** avg ${formatLatency(stats.avgLatencyMs)}, min ${formatLatency(stats.minLatencyMs!)}, max ${formatLatency(stats.maxLatencyMs!)}, p95 ${formatLatency(stats.p95LatencyMs!)}.`,
     );
   }
   lines.push(

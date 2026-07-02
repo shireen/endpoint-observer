@@ -4,6 +4,7 @@ import type { IncidentsRepo, IncidentRecord } from '../db/incidents.js';
 import type { SseHub } from '../realtime/sse.js';
 import { generatePayload } from './payload.js';
 import { pingOnce } from './pinger.js';
+import { formatLatency } from '../format.js';
 
 /** Anomaly detection tuning (documented in README). */
 export const ANOMALY_WINDOW_MS = 24 * 3_600_000; // 24h rolling baseline
@@ -81,7 +82,7 @@ export function detectIncident(
     latencyMs: record.latencyMs,
     baselineMs: avg,
     summary:
-      `Response time ${record.latencyMs}ms was ${(record.latencyMs / avg).toFixed(1)}x the ` +
-      `24h rolling average of ${Math.round(avg)}ms`,
+      `Response time ${formatLatency(record.latencyMs)} was ${(record.latencyMs / avg).toFixed(1)}x the ` +
+      `24h rolling average of ${formatLatency(avg)}`,
   });
 }
