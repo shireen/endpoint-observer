@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { MonitorResponse } from '../types';
-import { formatBytes, formatTime } from '../lib/api';
+import { formatBytes, formatLatency, formatTime } from '../lib/api';
 import { PayloadDrawer } from './PayloadDrawer';
 
 function StatusBadge({ response }: { response: MonitorResponse }) {
@@ -18,6 +18,27 @@ function StatusBadge({ response }: { response: MonitorResponse }) {
     >
       {response.statusCode}
     </span>
+  );
+}
+
+/** The payload link / inline error, shared by the desktop table and mobile cards. */
+function DetailCell({
+  response,
+  onView,
+}: {
+  response: MonitorResponse;
+  onView: (r: MonitorResponse) => void;
+}) {
+  if (response.error) {
+    return <span className="text-xs text-danger">{response.error}</span>;
+  }
+  return (
+    <button
+      onClick={() => onView(response)}
+      className="text-xs font-semibold text-gold-deep transition-colors hover:text-gold-soft"
+    >
+      View payload
+    </button>
   );
 }
 
@@ -58,8 +79,30 @@ export function ResponsesTable({ responses, loading, error }: Props) {
 
   return (
     <>
-      <div className="overflow-x-auto rounded-2xl border border-line">
-        <table className="w-full min-w-[560px] text-left text-sm">
+      {/* Mobile: stacked cards (no horizontal scroll on narrow screens) */}
+      <div className="space-y-2 sm:hidden">
+        {responses.map((r) => (
+          <div key={r.id} className="rounded-xl border border-line bg-paper p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-ink/80">{formatTime(r.createdAt)}</span>
+              <StatusBadge response={r} />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <span className="font-display tabular-nums text-ink">
+                {formatLatency(r.latencyMs)}
+              </span>
+              <span className="tabular-nums text-muted">{formatBytes(r.responseSizeBytes)}</span>
+              <span className="ml-auto">
+                <DetailCell response={r} onView={setSelected} />
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop / tablet: full table */}
+      <div className="hidden overflow-x-auto rounded-2xl border border-line sm:block">
+        <table className="w-full text-left text-sm">
           <thead className="bg-surface font-display text-[11px] uppercase tracking-widest text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Time</th>
@@ -78,21 +121,14 @@ export function ResponsesTable({ responses, loading, error }: Props) {
                 <td className="px-4 py-3">
                   <StatusBadge response={r} />
                 </td>
-                <td className="px-4 py-3 font-display tabular-nums text-ink">{r.latencyMs}ms</td>
+                <td className="px-4 py-3 font-display tabular-nums text-ink">
+                  {formatLatency(r.latencyMs)}
+                </td>
                 <td className="px-4 py-3 tabular-nums text-muted">
                   {formatBytes(r.responseSizeBytes)}
                 </td>
                 <td className="px-4 py-3">
-                  {r.error ? (
-                    <span className="text-xs text-danger">{r.error}</span>
-                  ) : (
-                    <button
-                      onClick={() => setSelected(r)}
-                      className="text-xs font-semibold text-gold-deep transition-colors hover:text-gold-soft"
-                    >
-                      View payload
-                    </button>
-                  )}
+                  <DetailCell response={r} onView={setSelected} />
                 </td>
               </tr>
             ))}

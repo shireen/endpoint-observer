@@ -95,3 +95,15 @@ export function formatBytes(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
+
+/**
+ * Formats a latency for display, adaptively scaling the unit for readability
+ * (ms is kept as the canonical stored unit; this only affects presentation).
+ * Sub-second values stay in ms; slower ones scale to s / min so a degraded
+ * response reads at a glance instead of as a wall of digits.
+ */
+export function formatLatency(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)}s`;
+  return `${(ms / 60_000).toFixed(1)}min`;
+}

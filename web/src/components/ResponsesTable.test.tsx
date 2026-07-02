@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ResponsesTable } from './ResponsesTable';
 import type { MonitorResponse } from '../types';
@@ -19,6 +19,10 @@ function sample(overrides: Partial<MonitorResponse> = {}): MonitorResponse {
     ...overrides,
   };
 }
+
+// Row content renders in both the mobile card list and the desktop table, so
+// scope row assertions to the table to keep queries unambiguous.
+const table = () => within(screen.getByRole('table'));
 
 describe('ResponsesTable', () => {
   it('shows a loading skeleton', () => {
@@ -43,10 +47,10 @@ describe('ResponsesTable', () => {
         loading={false}
       />,
     );
-    expect(screen.getByText('200')).toBeInTheDocument();
-    expect(screen.getByText('500')).toBeInTheDocument();
-    expect(screen.getByText('142ms')).toBeInTheDocument();
-    expect(screen.getByText('900ms')).toBeInTheDocument();
+    expect(table().getByText('200')).toBeInTheDocument();
+    expect(table().getByText('500')).toBeInTheDocument();
+    expect(table().getByText('142ms')).toBeInTheDocument();
+    expect(table().getByText('900ms')).toBeInTheDocument();
   });
 
   it('shows the error message for failed checks instead of a payload link', () => {
@@ -58,15 +62,15 @@ describe('ResponsesTable', () => {
         loading={false}
       />,
     );
-    expect(screen.getByText(/timed out/)).toBeInTheDocument();
-    expect(screen.queryByText('View payload')).not.toBeInTheDocument();
+    expect(table().getByText(/timed out/)).toBeInTheDocument();
+    expect(table().queryByText('View payload')).not.toBeInTheDocument();
   });
 
   it('opens the payload drawer on click and closes it again', async () => {
     const user = userEvent.setup();
     render(<ResponsesTable responses={[sample()]} loading={false} />);
 
-    await user.click(screen.getByText('View payload'));
+    await user.click(table().getByText('View payload'));
     expect(screen.getByRole('dialog', { name: 'Response detail' })).toBeInTheDocument();
     expect(screen.getAllByText(/"event": "search"/).length).toBeGreaterThan(0);
 

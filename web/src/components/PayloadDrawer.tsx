@@ -1,5 +1,5 @@
 import type { MonitorResponse } from '../types';
-import { formatTime } from '../lib/api';
+import { formatLatency, formatTime } from '../lib/api';
 
 function prettyJson(raw: string | null): string {
   if (raw === null) return '—';
@@ -32,7 +32,7 @@ export function PayloadDrawer({
           <div>
             <h3 className="font-display text-base font-bold text-ink">Check #{response.id}</h3>
             <p className="mt-0.5 text-xs text-muted">
-              {formatTime(response.createdAt)} · {response.latencyMs}ms · HTTP{' '}
+              {formatTime(response.createdAt)} · {formatLatency(response.latencyMs)} · HTTP{' '}
               {response.statusCode ?? '—'}
             </p>
           </div>

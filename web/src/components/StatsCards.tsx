@@ -1,4 +1,5 @@
 import type { Stats } from '../types';
+import { formatLatency } from '../lib/api';
 
 function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -31,16 +32,16 @@ export function StatsCards({ stats, loading }: { stats: Stats | undefined; loadi
       <Card label="Success rate" value={successRate} />
       <Card
         label="Avg latency"
-        value={stats.avgLatencyMs !== null ? `${Math.round(stats.avgLatencyMs)}ms` : '—'}
+        value={stats.avgLatencyMs !== null ? formatLatency(stats.avgLatencyMs) : '—'}
         hint={
           stats.minLatencyMs !== null
-            ? `min ${stats.minLatencyMs}ms · max ${stats.maxLatencyMs}ms`
+            ? `min ${formatLatency(stats.minLatencyMs)} · max ${formatLatency(stats.maxLatencyMs!)}`
             : undefined
         }
       />
       <Card
         label="p95 latency"
-        value={stats.p95LatencyMs !== null ? `${stats.p95LatencyMs}ms` : '—'}
+        value={stats.p95LatencyMs !== null ? formatLatency(stats.p95LatencyMs) : '—'}
       />
     </div>
   );
