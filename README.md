@@ -155,6 +155,7 @@ Why not the others: **Vercel/Netlify** are serverless — a 5-minute in-process 
 ## Future improvements
 
 - Time-series latency chart with anomaly markers on the dashboard (the API already exposes everything needed).
+- Request phase timings (DNS lookup → TCP connect → TLS handshake → time-to-first-byte), the way dedicated synthetic monitors break a check down. Today a timeout can only say "no response within budget"; phase timings would distinguish "their server accepted the connection and stalled" from "never reachable at all." Requires a lower-level HTTP client than `fetch` (undici interceptors or Node diagnostics channels), which is why it's future work rather than in this build.
 - Retention/rollup job — at 288 rows/day nothing is needed for months, but aggregating old rows to hourly stats is the obvious next step.
 - Postgres migration if this ever needs >1 instance (repos are the seam), which would also enable SSE fan-out via LISTEN/NOTIFY or Redis pub/sub.
 - Prompt caching on the Anthropic side (`cache_control` on the system prompt + tool definitions) — at current volume the fixed prefix is below Haiku's cacheable minimum for meaningful savings, but it's the first lever if chat volume grows.

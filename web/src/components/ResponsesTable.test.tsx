@@ -80,6 +80,30 @@ describe('ResponsesTable', () => {
     expect(table().getByText('error')).toBeInTheDocument();
   });
 
+  it('opens the drawer for a failed check, showing the sent payload and a no-response note', async () => {
+    const user = userEvent.setup();
+    render(
+      <ResponsesTable
+        responses={[
+          sample({
+            statusCode: null,
+            ok: false,
+            error: 'Request timed out after 10000ms',
+            responseBody: null,
+            responseSizeBytes: null,
+          }),
+        ]}
+        loading={false}
+      />,
+    );
+
+    await user.click(table().getByText(/timed out/));
+    const dialog = screen.getByRole('dialog', { name: 'Response detail' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText(/"event": "search"/)).toBeInTheDocument(); // sent payload
+    expect(screen.getByText(/No response was received/)).toBeInTheDocument();
+  });
+
   it('opens the payload drawer on click and closes it again', async () => {
     const user = userEvent.setup();
     render(<ResponsesTable responses={[sample()]} loading={false} />);

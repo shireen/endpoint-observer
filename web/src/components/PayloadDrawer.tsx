@@ -55,9 +55,16 @@ export function PayloadDrawer({
         <h4 className="mb-1.5 font-display text-[11px] font-semibold uppercase tracking-widest text-gold-deep">
           Response body (received)
         </h4>
-        <pre className="overflow-x-auto rounded-lg border border-line bg-surface-2 p-3 text-xs text-ink/80">
-          {prettyJson(response.responseBody)}
-        </pre>
+        {response.error ? (
+          <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-xs leading-relaxed text-danger">
+            No response was received — {response.error}. The payload above was sent; nothing came
+            back within the request budget.
+          </div>
+        ) : (
+          <pre className="overflow-x-auto rounded-lg border border-line bg-surface-2 p-3 text-xs text-ink/80">
+            {prettyJson(response.responseBody)}
+          </pre>
+        )}
       </div>
     </div>
   );

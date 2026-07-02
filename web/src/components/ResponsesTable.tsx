@@ -26,7 +26,11 @@ function StatusBadge({ response }: { response: MonitorResponse }) {
   );
 }
 
-/** The payload link / inline error, shared by the desktop table and mobile cards. */
+/**
+ * The detail affordance, shared by the desktop table and mobile cards.
+ * Failures open the same drawer as successes — the request payload was sent
+ * and recorded either way — with the error text itself as the link.
+ */
 function DetailCell({
   response,
   onView,
@@ -35,7 +39,14 @@ function DetailCell({
   onView: (r: MonitorResponse) => void;
 }) {
   if (response.error) {
-    return <span className="text-xs text-danger">{response.error}</span>;
+    return (
+      <button
+        onClick={() => onView(response)}
+        className="text-left text-xs text-danger underline decoration-dotted underline-offset-2 transition-colors hover:decoration-solid"
+      >
+        {response.error}
+      </button>
+    );
   }
   return (
     <button
