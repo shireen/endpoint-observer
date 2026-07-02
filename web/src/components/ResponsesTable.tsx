@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { MonitorResponse } from '../types';
-import { formatBytes, formatLatency, formatTime } from '../lib/api';
+import { formatBytes, formatLatency, formatTime, latencyToneClass } from '../lib/api';
 import { PayloadDrawer } from './PayloadDrawer';
 
 function StatusBadge({ response }: { response: MonitorResponse }) {
@@ -88,7 +88,7 @@ export function ResponsesTable({ responses, loading, error }: Props) {
               <StatusBadge response={r} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              <span className="font-display tabular-nums text-ink">
+              <span className={`font-display tabular-nums ${latencyToneClass(r.latencyMs)}`}>
                 {formatLatency(r.latencyMs)}
               </span>
               <span className="tabular-nums text-muted">{formatBytes(r.responseSizeBytes)}</span>
@@ -121,7 +121,9 @@ export function ResponsesTable({ responses, loading, error }: Props) {
                 <td className="px-4 py-3">
                   <StatusBadge response={r} />
                 </td>
-                <td className="px-4 py-3 font-display tabular-nums text-ink">
+                <td
+                  className={`px-4 py-3 font-display tabular-nums ${latencyToneClass(r.latencyMs)}`}
+                >
                   {formatLatency(r.latencyMs)}
                 </td>
                 <td className="px-4 py-3 tabular-nums text-muted">

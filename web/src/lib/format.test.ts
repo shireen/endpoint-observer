@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatLatency, formatBytes } from './api';
+import { formatLatency, formatBytes, latencyToneClass } from './api';
 
 describe('formatLatency', () => {
   it('keeps sub-second values in milliseconds', () => {
@@ -19,6 +19,17 @@ describe('formatLatency', () => {
   it('scales values over a minute to minutes', () => {
     expect(formatLatency(60_000)).toBe('1.0min');
     expect(formatLatency(2_076_365)).toBe('34.6min');
+  });
+});
+
+describe('latencyToneClass', () => {
+  it('is neutral when healthy, gold when elevated, red when high', () => {
+    expect(latencyToneClass(150)).toBe('text-ink');
+    expect(latencyToneClass(999)).toBe('text-ink');
+    expect(latencyToneClass(1000)).toBe('text-gold-deep'); // elevated at 1s
+    expect(latencyToneClass(2999)).toBe('text-gold-deep');
+    expect(latencyToneClass(3000)).toBe('text-danger'); // high at 3s
+    expect(latencyToneClass(18507)).toBe('text-danger');
   });
 });
 

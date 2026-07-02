@@ -1,13 +1,25 @@
 import type { Stats } from '../types';
-import { formatLatency } from '../lib/api';
+import { formatLatency, latencyToneClass } from '../lib/api';
 
-function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Card({
+  label,
+  value,
+  hint,
+  valueClassName = 'text-ink',
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-gold/60">
       <p className="font-display text-[11px] font-medium uppercase tracking-widest text-muted">
         {label}
       </p>
-      <p className="mt-2 font-display text-3xl font-bold tabular-nums text-ink">{value}</p>
+      <p className={`mt-2 font-display text-3xl font-bold tabular-nums ${valueClassName}`}>
+        {value}
+      </p>
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
@@ -33,6 +45,9 @@ export function StatsCards({ stats, loading }: { stats: Stats | undefined; loadi
       <Card
         label="Avg latency"
         value={stats.avgLatencyMs !== null ? formatLatency(stats.avgLatencyMs) : '—'}
+        valueClassName={
+          stats.avgLatencyMs !== null ? latencyToneClass(stats.avgLatencyMs) : 'text-ink'
+        }
         hint={
           stats.minLatencyMs !== null
             ? `min ${formatLatency(stats.minLatencyMs)} · max ${formatLatency(stats.maxLatencyMs!)}`
@@ -42,6 +57,9 @@ export function StatsCards({ stats, loading }: { stats: Stats | undefined; loadi
       <Card
         label="p95 latency"
         value={stats.p95LatencyMs !== null ? formatLatency(stats.p95LatencyMs) : '—'}
+        valueClassName={
+          stats.p95LatencyMs !== null ? latencyToneClass(stats.p95LatencyMs) : 'text-ink'
+        }
       />
     </div>
   );

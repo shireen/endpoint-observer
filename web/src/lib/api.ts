@@ -107,3 +107,23 @@ export function formatLatency(ms: number): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)}s`;
   return `${(ms / 60_000).toFixed(1)}min`;
 }
+
+/**
+ * Latency severity thresholds (ms) used to color latency values. Kept as
+ * named constants so the "what counts as slow" policy lives in one place and
+ * is easy to tune. httpbin normally answers in ~150–350ms, so 1s is already
+ * several times baseline and 3s is clearly bad.
+ */
+export const LATENCY_ELEVATED_MS = 1000;
+export const LATENCY_HIGH_MS = 3000;
+
+/**
+ * Tailwind text-color class for a latency value: neutral when healthy, gold
+ * when elevated, red when high — so urgency is signalled by color (honest,
+ * threshold-based) rather than by the raw magnitude of the number.
+ */
+export function latencyToneClass(ms: number): string {
+  if (ms >= LATENCY_HIGH_MS) return 'text-danger';
+  if (ms >= LATENCY_ELEVATED_MS) return 'text-gold-deep';
+  return 'text-ink';
+}
