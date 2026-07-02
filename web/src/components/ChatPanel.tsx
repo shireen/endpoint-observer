@@ -64,17 +64,20 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-[70vh] flex-col rounded-xl border border-slate-800 bg-slate-900/40">
+    <div className="flex h-[70vh] flex-col rounded-2xl border border-line bg-surface">
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5">
         {messages.length === 0 && (
-          <div className="mt-8 text-center">
-            <p className="text-sm text-slate-300">Ask questions about the monitoring data</p>
-            <div className="mx-auto mt-4 flex max-w-md flex-col gap-2">
+          <div className="mt-10 text-center">
+            <p className="font-display text-base font-medium text-ink">
+              Ask questions about the monitoring data
+            </p>
+            <p className="mt-1 text-xs text-muted">Answers are grounded in the recorded checks.</p>
+            <div className="mx-auto mt-5 flex max-w-md flex-col gap-2">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   onClick={() => void submit(s)}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-left text-sm text-slate-300 transition-colors hover:border-sky-600 hover:text-sky-300"
+                  className="rounded-lg border border-line bg-paper px-3 py-2.5 text-left text-sm text-ink/80 transition-colors hover:border-gold/60 hover:text-ink"
                 >
                   {s}
                 </button>
@@ -89,14 +92,20 @@ export function ChatPanel() {
           >
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                message.role === 'user' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-200'
+                message.role === 'user'
+                  ? 'bg-gold font-medium text-ink'
+                  : 'border border-line bg-paper text-ink'
               }`}
             >
               <pre className="whitespace-pre-wrap font-sans">
                 {message.content || (busy && i === messages.length - 1 ? 'Thinking…' : '')}
               </pre>
               {message.source && (
-                <p className="mt-1 text-[10px] uppercase tracking-wider opacity-60">
+                <p
+                  className={`mt-1.5 font-display text-[10px] uppercase tracking-widest ${
+                    message.role === 'user' ? 'text-ink/60' : 'text-muted'
+                  }`}
+                >
                   {SOURCE_LABEL[message.source]}
                 </p>
               )}
@@ -104,13 +113,13 @@ export function ChatPanel() {
           </div>
         ))}
         {error && (
-          <p className="rounded-lg border border-red-900/50 bg-red-950/30 p-3 text-xs text-red-300">
+          <p className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-xs text-danger">
             {error}
           </p>
         )}
       </div>
       <form
-        className="flex gap-2 border-t border-slate-800 p-3"
+        className="flex gap-2 border-t border-line p-3"
         onSubmit={(e) => {
           e.preventDefault();
           void submit(input);
@@ -121,12 +130,12 @@ export function ChatPanel() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="e.g. Why did latency spike this afternoon?"
           maxLength={2000}
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-600 focus:outline-none"
+          className="flex-1 rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-gold focus:outline-none"
         />
         <button
           type="submit"
           disabled={busy || input.trim().length === 0}
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-gold px-5 py-2 font-display text-sm font-semibold text-ink transition-colors hover:bg-gold-soft disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? '…' : 'Send'}
         </button>

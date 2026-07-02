@@ -9,10 +9,10 @@ export function Dashboard() {
   const responses = useQuery({ queryKey: ['responses'], queryFn: () => fetchResponses(50) });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <StatsCards stats={stats.data} loading={stats.isLoading} />
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">
+        <h2 className="mb-3 font-display text-xs font-semibold uppercase tracking-widest text-muted">
           Recent checks
         </h2>
         <ResponsesTable

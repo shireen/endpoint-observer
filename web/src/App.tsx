@@ -17,34 +17,44 @@ export default function App() {
   const incidentCount = incidents.data?.items.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-8">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Endpoint Observer</h1>
-            <p className="text-xs text-slate-400">
-              pings <code className="text-slate-300">httpbin.org/anything</code> every 5 minutes
-            </p>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-40 border-b border-line bg-paper/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-8">
+          <div className="flex items-center gap-3">
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-display text-lg font-bold text-ink"
+              aria-hidden
+            >
+              E
+            </span>
+            <div>
+              <h1 className="font-display text-lg font-bold uppercase tracking-tight text-ink">
+                Endpoint <span className="rounded-sm bg-gold px-1.5 py-0.5 text-ink">Observer</span>
+              </h1>
+              <p className="mt-0.5 text-xs text-muted">
+                synthetic monitoring for <code className="text-ink/70">httpbin.org/anything</code>
+              </p>
+            </div>
           </div>
           <ConnectionBadge state={connection} />
         </div>
       </header>
 
-      <nav className="border-b border-slate-800 px-4 sm:px-8">
+      <nav className="border-b border-line px-4 sm:px-8">
         <div className="mx-auto flex max-w-6xl gap-1">
           {TABS.map((name) => (
             <button
               key={name}
               onClick={() => setTab(name)}
-              className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`relative px-4 py-3 font-display text-sm font-medium tracking-wide transition-colors ${
                 tab === name
-                  ? 'text-sky-400 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-sky-400'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-gold'
+                  : 'text-muted hover:text-ink'
               }`}
             >
               {name}
               {name === 'Incidents' && incidentCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                <span className="ml-1.5 rounded-full bg-gold/25 px-1.5 py-0.5 text-[10px] font-semibold text-ink">
                   {incidentCount}
                 </span>
               )}
@@ -53,7 +63,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-8">
+      <main className="mx-auto max-w-6xl px-4 py-7 sm:px-8">
         {tab === 'Dashboard' && <Dashboard />}
         {tab === 'Incidents' && <IncidentsPanel />}
         {tab === 'Ask AI' && <ChatPanel />}

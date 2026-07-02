@@ -2,10 +2,12 @@ import type { Stats } from '../types';
 
 function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <p className="text-xs uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+    <div className="rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-gold/60">
+      <p className="font-display text-[11px] font-medium uppercase tracking-widest text-muted">
+        {label}
+      </p>
+      <p className="mt-2 font-display text-3xl font-bold tabular-nums text-ink">{value}</p>
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -15,10 +17,7 @@ export function StatsCards({ stats, loading }: { stats: Stats | undefined; loadi
     return (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
-          <div
-            key={i}
-            className="h-24 animate-pulse rounded-xl border border-slate-800 bg-slate-900/60"
-          />
+          <div key={i} className="h-28 animate-pulse rounded-2xl border border-line bg-surface" />
         ))}
       </div>
     );

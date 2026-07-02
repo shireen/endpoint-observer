@@ -1,1 +1,44 @@
 @import 'tailwindcss';
+
+/*
+ * Design language: Contrarian Thinking / BizScout — a clean white editorial
+ * canvas, near-black text, and a bold gold accent used as fills and
+ * highlights. Display face is ABC Monument Grotesk (licensed, preferred) with
+ * Schibsted Grotesk as the free fallback. Tokens are exposed as Tailwind
+ * utilities (bg-paper, bg-surface, text-ink, text-gold, border-line,
+ * font-display, …).
+ */
+@theme {
+  --color-paper: #ffffff; /* page canvas */
+  --color-surface: #faf9f6; /* cards (warm off-white) */
+  --color-surface-2: #f2f1ea; /* code blocks */
+  --color-line: #e7e5dd; /* hairline borders */
+  --color-ink: #191817; /* primary text (near-black) */
+  --color-muted: #6c6b64; /* secondary text */
+  --color-gold: #f4c020; /* brand accent (fills) */
+  --color-gold-soft: #e0ad12; /* accent hover / pressed */
+  --color-gold-deep: #876700; /* accent text on white (readable) */
+  --color-success: #1f8a4c; /* healthy / 2xx */
+  --color-danger: #c62828; /* failed / error */
+
+  --font-display: 'ABC Monument Grotesk', 'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(50rem 22rem at 50% -16rem, rgba(244, 192, 32, 0.1), transparent 60%),
+    var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-gold);
+  color: var(--color-ink);
+}
