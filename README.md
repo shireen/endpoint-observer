@@ -2,6 +2,8 @@
 
 Synthetic monitoring for an HTTP endpoint, built as the full-stack take-home for the BizScout engineering team: a service that pings `httpbin.org/anything` every 5 minutes with a randomized JSON payload, stores every outcome, and streams it live to a dashboard — plus the **Option B AI enhancement** (natural-language chat over the monitoring data and automatic LLM incident reports, wrapped in strict cost controls).
 
+**Live demo:** https://server-production-073d.up.railway.app/ (running on Railway; the ping cadence is temporarily set to every minute so you can watch real-time updates without waiting)
+
 ## Quick start
 
 Requirements: Node.js ≥ 20 (developed on 24).
@@ -134,7 +136,7 @@ Worst-case ceiling with the rate limit saturated 24/7 (20 calls/hr at generous p
 - _"Response time > 2x average"_ (Option B's trigger) is interpreted as: successful checks only, against a 24h rolling average of successful checks, requiring ≥5 baseline samples. Failures are already loud in the dashboard; alerting latency math on top of them adds noise, not signal. >4× escalates severity to `critical`.
 - The ping interval is env-configurable (`PING_CRON`) with the required 5-minute default — reviewers shouldn't have to wait 5 minutes to see the realtime path work.
 - One LLM "call" = one Messages API request. Free `count_tokens` requests don't count against the budget.
-- `httpbin.org` is flaky by nature; timeouts (10s default) and failures are recorded as first-class data rather than retried — for a monitoring tool, the failure _is_ the observation.
+- `httpbin.org` is flaky by nature; timeouts (10s default) and failures are recorded as first-class data rather than retried — for a monitoring tool, the failure _is_ the observation. (This was proven within minutes of the first production deploy: httpbin.org had a real global 503 outage, which the monitor recorded faithfully — visible in the live demo's history. `PING_URL` exists as an operational lever to point at the API-compatible mirror `https://httpbingo.org/anything` if the outage recurs during review.)
 - Payload contents just need to be "random JSON," so they're randomized in shape (varying keys/nesting/array lengths), not only values, and themed as BizScout-ish marketplace events for fun.
 - No auth: the assignment doesn't call for users, and adding half-hearted auth would be scope theater. Noted under future improvements.
 
