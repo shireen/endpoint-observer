@@ -2,7 +2,7 @@
 
 Synthetic monitoring for an HTTP endpoint, built as the full-stack take-home for the BizScout engineering team: a service that pings `httpbin.org/anything` every 5 minutes with a randomized JSON payload, stores every outcome, and streams it live to a dashboard — plus the **Option B AI enhancement** (natural-language chat over the monitoring data and automatic LLM incident reports, wrapped in strict cost controls).
 
-**Live demo:** https://server-production-073d.up.railway.app/ (running on Railway; the ping cadence is temporarily set to every minute so you can watch real-time updates without waiting)
+**Live demo:** https://server-production-073d.up.railway.app/ (running on Railway on the spec's 5-minute cadence — leave the dashboard open and a new row appears live, no refresh, when the next check fires)
 
 ## Quick start
 
@@ -63,6 +63,7 @@ The **monitor pipeline** (`server/src/monitor/`) is the core of the app: one cyc
 | **Claude Haiku 4.5 by default**                  | The workload is tool-grounded summarization — a frontier model is wasted on it. Haiku is ~10× cheaper than Opus-tier ($1/$5 vs $5/$25 per MTok) and more than capable here. `LLM_MODEL` overrides it.                                                                                                                                                                                                                                    |
 | **Express 5 + repositories, no ORM**             | The schema is 3 tables. An ORM would be more dependency than the query surface justifies; thin repo factories (`createResponsesRepo(db)`) keep queries visible and testable.                                                                                                                                                                                                                                                             |
 | **Cron in-process** (`node-cron`)                | The scheduler and the app share state (DB, SSE hub), so a separate worker/queue would only add moving parts. The deploy target is a long-running server precisely so this works.                                                                                                                                                                                                                                                         |
+| **react-markdown for LLM output**                | Incident analyses and chat answers are model-generated markdown. react-markdown renders them without ever touching dangerouslySetInnerHTML, so LLM output cannot inject markup into the page.                                                                                                                                                                                                                                            |
 
 ## Database schema
 
@@ -99,7 +100,7 @@ llm_usage (
 - **Monitor pipeline** (`server/test/payload|pinger|monitorService.test.ts`) — comprehensive: payload shape/uniqueness/variability; success, HTTP-error, timeout, and network-failure normalization (all four must store, never throw); broadcast emission; and every branch of incident detection — 2× threshold, 4× critical escalation, minimum-baseline guard, failures excluded both as triggers and from the baseline average.
 - **REST API** (`server/test/api.test.ts`) — integration tests with supertest against a real in-memory SQLite: pagination cursors, filters, validation errors, 404s, and the chat endpoint's SSE framing.
 - **Cost controls** (`server/test/costControl|insights.test.ts`) — rolling-hour rate limit, cache normalization/TTL/eviction, cost math, the tool-use agent loop against a scripted fake client, and every degradation path (no key, quota exhausted, API error → fallback, never a 500).
-- **Frontend** (`web/src/components/ResponsesTable.test.tsx`) — component tests for the loading/error/empty/data states and the payload drawer interaction (the "huge plus" item).
+- **Frontend** (`web/src/**/*.test.{ts,tsx}`) — component tests (the "huge plus" item) for the responses table's loading/error/empty/data states and payload drawer, the metric info-tooltip's interaction and accessibility contract, and unit tests for the adaptive latency formatting and severity thresholds.
 
 Deliberately _not_ tested: `httpbin.org` itself (mocked everywhere — tests must pass offline and in CI), and pixel-level UI.
 

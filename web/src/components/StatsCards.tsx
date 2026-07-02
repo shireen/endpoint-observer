@@ -80,6 +80,7 @@ export function StatsCards({ stats, loading }: { stats: Stats | undefined; loadi
         severity={stats.avgLatencyMs !== null ? latencySeverity(stats.avgLatencyMs) : undefined}
         info={AVG_INFO}
         hint={
+          // min being non-null means at least one row exists, so max does too.
           stats.minLatencyMs !== null
             ? `min ${formatLatency(stats.minLatencyMs)} · max ${formatLatency(stats.maxLatencyMs!)}`
             : undefined

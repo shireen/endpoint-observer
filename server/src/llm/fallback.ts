@@ -28,6 +28,7 @@ export function fallbackChatAnswer(
     `**Last 24 hours:** ${stats.count} checks — ${stats.okCount} succeeded, ${stats.failedCount} failed.`,
   ];
   if (stats.avgLatencyMs !== null) {
+    // avg being non-null means at least one row exists, so min/max/p95 do too.
     lines.push(
       `**Latency:** avg ${formatLatency(stats.avgLatencyMs)}, min ${formatLatency(stats.minLatencyMs!)}, max ${formatLatency(stats.maxLatencyMs!)}, p95 ${formatLatency(stats.p95LatencyMs!)}.`,
     );
