@@ -160,7 +160,7 @@ Target: **Railway** (long-running process + persistent volume, which this design
 3. Set env vars: `ANTHROPIC_API_KEY`, optionally `PING_CRON`, `LLM_CALLS_PER_HOUR`. `PORT` is injected by Railway and respected automatically.
 4. The server serves the built dashboard itself, so one service is the whole app.
 
-Why not the others: **Vercel/Netlify** are serverless — a 5-minute in-process scheduler and open SSE connections don't fit their execution model (it would need external cron + a rearchitected realtime path). **Render's free tier** spins the service down after 15 idle minutes, which silently kills the scheduler — fine for a demo if you accept gaps, wrong for a monitor; it works on Render's paid always-on tier with a disk attached.
+Why not the others? **Vercel/Netlify** are serverless — a 5-minute in-process scheduler and open SSE connections don't fit their execution model (it would require an external cron + a rearchitected real-time path). **Render's free tier** spins the service down after 15 idle minutes, which silently kills the scheduler — fine for a demo if you accept gaps, wrong for a monitor; it works on Render's paid always-on tier with a disk attached.
 
 ## Future improvements
 
@@ -176,15 +176,15 @@ Why not the others: **Vercel/Netlify** are serverless — a 5-minute in-process 
 
 - **Target user:** a small engineering team (or solo operator) that depends on an HTTP endpoint — theirs or a third party's — and can't afford to babysit a dashboard.
 - **Job to be done:** "Tell me when my endpoint is degrading, and give me a trustworthy first read on why, before my users tell me."
-- **Success metric:** time-to-detection and alert precision (incidents worth attention ÷ incidents raised). Alert fatigue is the failure mode that kills monitoring tools — hence repeated anomalies grouping into one evolving incident instead of a page of duplicates.
-- **Prioritization logic:** trust before breadth. The AI effort went into grounding — evidence-first incident reports fed the monitor's real configuration, parameterized tools instead of text-to-SQL, hard cost caps, honest severity signaling — rather than more AI surface area. A monitoring assistant that invents root causes erodes the exact trust the product exists to build; one wrong recommendation costs more than ten missing features.
+- **Success metric:** time-to-detection and alert precision (incidents worth attention ÷ incidents raised). Alert fatigue is the failure mode that kills monitoring tools — hence, repeated anomalies are grouped into a single evolving incident rather than a page of duplicates.
+- **Prioritization logic:** trust before breadth. The AI effort went into grounding — evidence-first incident reports fed the monitor's real configuration, parameterized tools rather than text-to-SQL, hard cost caps, honest severity signaling — rather than adding more AI surface area. A monitoring assistant that invents root causes erodes the exact trust the product exists to build; one wrong recommendation costs more than ten missing features.
 
 ## Process note
 
-Built with Claude Code as the pair (Haiku, Opus, and Fable across subtasks), per the brief's encouragement. A short decision journal:
+Built by @shireen with Claude Code (Haiku, Opus, and Fable depending on the complexity and use case of the task). Code review by Codex 5.5.
 
-- **Scope choices:** Option B over A/C (best fit for showing AI product judgment plus cost discipline); no auth (documented, not half-built); infrastructure sized to the workload — SQLite, SSE, Haiku — with the seams to grow noted in the decision table.
-- **AI's role vs. mine:** Claude Code wrote most of the implementation and tests; the product decisions were mine — what to build, the trust-over-breadth prioritization above, unit/severity presentation on the dashboard, accessibility requirements, when findings from review were worth fixing versus defending.
+A short decision journal:
+- **Scope choices:** Option B over A/C (best fit for showing AI product judgment plus cost discipline); infrastructure sized to the workload — SQLite, SSE, Haiku — with the seams to grow noted in the decision table.
+- **AI's role vs. mine:** Claude Code wrote most of the implementation and tests; the product decisions were mine — what to build, the trust-over-breadth prioritization above, unit/severity presentation on the dashboard, accessibility requirements, and when findings from review were worth fixing.
 - **Bugs found and fixed along the way:** unclean SSE disconnects crashing the server (caught via crash alerts, fixed, then verified by killing 36 live connections against production); a missing volume wiping the database every deploy (which also cost us the recorded httpbin outage history); a cron misconfiguration (`5 * * * *` is hourly, not every-5-minutes); a rate-limit race under concurrent requests, caught by an independent AI code review (Codex) and fixed with atomic reservations plus a concurrency regression test.
-- **Trade-offs:** rules-first payload analysis instead of another LLM flow (deterministic, free, testable); prompt-contract tests rather than LLM-judge output evals (CI has no API key — noted below as future work); cost estimates use standard list pricing so they never under-report.
-- **What I'd change with more time:** request phase timings (see future improvements), LLM-judge evaluation of incident-report grounding, alerting integrations, and retention rollups.
+- **Trade-offs:** rules-first payload analysis instead of another LLM flow (deterministic, free, testable); prompt-contract tests rather than LLM-judge output evals (CI has no API key — noted below as future work); cost estimates use standard list pricing (not introductory pricing) so they never under-report.
