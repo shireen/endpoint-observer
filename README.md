@@ -137,9 +137,9 @@ Worst-case ceiling with the rate limit saturated 24/7 (20 calls/hr at generous p
 - _"Response time > 2x average"_ (Option B's trigger) is interpreted as: successful checks only, against a 24h rolling average of successful checks, requiring ≥5 baseline samples. Failures are already loud in the dashboard; alerting latency math on top of them adds noise, not signal. >4× escalates severity to `critical`.
 - The ping interval is env-configurable (`PING_CRON`) with the required 5-minute default — reviewers shouldn't have to wait 5 minutes to see the realtime path work.
 - One LLM "call" = one Messages API request. Free `count_tokens` requests don't count against the budget.
-- `httpbin.org` is flaky by nature; timeouts (10s default) and failures are recorded as first-class data rather than retried — for a monitoring tool, the failure _is_ the observation. (This was proven within minutes of the first production deploy: httpbin.org had a real global 503 outage, which the monitor recorded faithfully — visible in the live demo's history. `PING_URL` exists as an operational lever to point at the API-compatible mirror `https://httpbingo.org/anything` if the outage recurs during review.)
+- `httpbin.org` is flaky by nature; timeouts (10s default) and failures are recorded as first-class data rather than retried — for a monitoring tool, the failure _is_ the observation. (This was proven within minutes of the first production deploy: httpbin.org had a real global 503 outage, which the monitor recorded faithfully (but lost when data was lost fixing a bug). `PING_URL` exists as an operational lever to point at the API-compatible mirror `https://httpbingo.org/anything` if the outage recurs during review.)
 - Payload contents just need to be "random JSON," so they're randomized in shape (varying keys/nesting/array lengths), not only values, and themed as BizScout-ish marketplace events for fun.
-- No auth: the assignment doesn't call for users, and adding half-hearted auth would be scope theater. Noted under future improvements.
+- No auth: the assignment doesn't call for users. Noted under future improvements.
 
 ## Deployment
 
@@ -160,7 +160,8 @@ Why not the others: **Vercel/Netlify** are serverless — a 5-minute in-process 
 - Postgres migration if this ever needs >1 instance (repos are the seam), which would also enable SSE fan-out via LISTEN/NOTIFY or Redis pub/sub.
 - Prompt caching on the Anthropic side (`cache_control` on the system prompt + tool definitions) — at current volume the fixed prefix is below Haiku's cacheable minimum for meaningful savings, but it's the first lever if chat volume grows.
 - Auth + multi-tenancy, alerting integrations (email/Slack webhook on incident), configurable multiple endpoints to monitor.
+- Notifications to alert API owner(s) to address errors or timeouts.
 
 ## Process note
 
-Per the brief's encouragement ("our team uses Claude Code day in day out"), this was built with Claude Code as the pair. The architecture, trade-offs, and scope decisions documented above were the driver's seat work; the tests were written against intended behavior and several caught real bugs during development (e.g. Testing Library cleanup not registering without vitest globals, and a usage-endpoint wiring mistake).
+This project was built with Claude Code (Haiku, Opus, and Fable depending on the subtask and complexity / use case).
