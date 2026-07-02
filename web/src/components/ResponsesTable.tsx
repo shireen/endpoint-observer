@@ -5,9 +5,14 @@ import { PayloadDrawer } from './PayloadDrawer';
 
 function StatusBadge({ response }: { response: MonitorResponse }) {
   if (response.statusCode === null) {
+    // The request never completed. Timeouts are a distinct failure class from
+    // other network errors (the service was reachable but too slow), so label
+    // them specifically. The error text is server-generated, so matching on
+    // it is stable.
+    const isTimeout = /timed out/i.test(response.error ?? '');
     return (
       <span className="rounded-md bg-danger/10 px-2 py-0.5 font-display text-xs font-medium text-danger">
-        error
+        {isTimeout ? 'timeout' : 'error'}
       </span>
     );
   }

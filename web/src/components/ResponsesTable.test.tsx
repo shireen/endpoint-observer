@@ -66,6 +66,20 @@ describe('ResponsesTable', () => {
     expect(table().queryByText('View payload')).not.toBeInTheDocument();
   });
 
+  it('labels timeouts distinctly from other network errors', () => {
+    render(
+      <ResponsesTable
+        responses={[
+          sample({ id: 1, statusCode: null, ok: false, error: 'Request timed out after 10000ms' }),
+          sample({ id: 2, statusCode: null, ok: false, error: 'fetch failed' }),
+        ]}
+        loading={false}
+      />,
+    );
+    expect(table().getByText('timeout')).toBeInTheDocument();
+    expect(table().getByText('error')).toBeInTheDocument();
+  });
+
   it('opens the payload drawer on click and closes it again', async () => {
     const user = userEvent.setup();
     render(<ResponsesTable responses={[sample()]} loading={false} />);
