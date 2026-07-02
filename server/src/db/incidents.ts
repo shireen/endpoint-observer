@@ -11,6 +11,10 @@ export interface IncidentRecord {
   summary: string;
   analysis: string | null;
   analysisSource: 'pending' | 'llm' | 'fallback';
+  /** How many anomalies have been grouped into this incident. */
+  occurrences: number;
+  /** Timestamp of the most recent grouped occurrence. */
+  lastSeenAt: number;
 }
 
 interface Row {
@@ -24,6 +28,8 @@ interface Row {
   summary: string;
   analysis: string | null;
   analysis_source: 'pending' | 'llm' | 'fallback';
+  occurrences: number;
+  last_seen_at: number | null;
 }
 
 function toRecord(row: Row): IncidentRecord {
@@ -38,15 +44,17 @@ function toRecord(row: Row): IncidentRecord {
     summary: row.summary,
     analysis: row.analysis,
     analysisSource: row.analysis_source,
+    occurrences: row.occurrences,
+    lastSeenAt: row.last_seen_at ?? row.created_at,
   };
 }
 
 export function createIncidentsRepo(db: Db) {
   const insertStmt = db.prepare(`
     INSERT INTO incidents
-      (created_at, response_id, severity, endpoint, latency_ms, baseline_ms, summary, analysis_source)
+      (created_at, response_id, severity, endpoint, latency_ms, baseline_ms, summary, analysis_source, occurrences, last_seen_at)
     VALUES
-      (@createdAt, @responseId, @severity, @endpoint, @latencyMs, @baselineMs, @summary, 'pending')
+      (@createdAt, @responseId, @severity, @endpoint, @latencyMs, @baselineMs, @summary, 'pending', 1, @createdAt)
   `);
   const byIdStmt = db.prepare('SELECT * FROM incidents WHERE id = ?');
 
@@ -66,6 +74,31 @@ export function createIncidentsRepo(db: Db) {
 
     getById(id: number): IncidentRecord | undefined {
       const row = byIdStmt.get(id) as Row | undefined;
+      return row ? toRecord(row) : undefined;
+    },
+
+    /** Folds a repeated anomaly into an existing incident instead of opening a new one. */
+    recordRecurrence(
+      id: number,
+      seenAt: number,
+      latencyMs: number,
+      severity: 'warning' | 'critical',
+    ): IncidentRecord {
+      db.prepare(
+        `UPDATE incidents
+         SET occurrences = occurrences + 1,
+             last_seen_at = @seenAt,
+             latency_ms = MAX(latency_ms, @latencyMs),
+             severity = CASE WHEN @severity = 'critical' THEN 'critical' ELSE severity END
+         WHERE id = @id`,
+      ).run({ id, seenAt, latencyMs, severity });
+      return this.getById(id)!;
+    },
+
+    /** Most recent incident, if any (used to decide grouping). */
+    latest(): IncidentRecord | undefined {
+      const row = db.prepare('SELECT * FROM incidents ORDER BY id DESC LIMIT 1').get() as
+        Row | undefined;
       return row ? toRecord(row) : undefined;
     },
 

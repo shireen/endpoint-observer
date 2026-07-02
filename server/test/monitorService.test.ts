@@ -1,5 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { runPing, detectIncident, MIN_BASELINE_SAMPLES } from '../src/monitor/service.js';
+import {
+  runPing,
+  detectIncident,
+  MIN_BASELINE_SAMPLES,
+  INCIDENT_GROUP_WINDOW_MS,
+} from '../src/monitor/service.js';
 import { FakeHub, asHub, okFetch, repos, sampleResponse, silentLogger, testDb } from './helpers.js';
 
 describe('monitor pipeline (core component)', () => {
@@ -54,20 +59,25 @@ describe('monitor pipeline (core component)', () => {
       seedBaseline(MIN_BASELINE_SAMPLES, 100);
       const slow = r.responses.insert(sampleResponse({ latencyMs: 250 }));
 
-      const incident = detectIncident({ responses: r.responses, incidents: r.incidents }, slow);
-      expect(incident).not.toBeNull();
-      expect(incident?.severity).toBe('warning');
-      expect(incident?.responseId).toBe(slow.id);
-      expect(incident?.baselineMs).toBeCloseTo(100);
-      expect(r.incidents.getById(incident!.id)?.analysisSource).toBe('pending');
+      const detection = detectIncident({ responses: r.responses, incidents: r.incidents }, slow);
+      expect(detection).not.toBeNull();
+      expect(detection?.isNew).toBe(true);
+      expect(detection?.incident.severity).toBe('warning');
+      expect(detection?.incident.responseId).toBe(slow.id);
+      expect(detection?.incident.baselineMs).toBeCloseTo(100);
+      expect(detection?.incident.occurrences).toBe(1);
+      expect(r.incidents.getById(detection!.incident.id)?.analysisSource).toBe('pending');
     });
 
     it('escalates to critical above 4x the baseline', () => {
       seedBaseline(MIN_BASELINE_SAMPLES, 100);
       const verySlow = r.responses.insert(sampleResponse({ latencyMs: 450 }));
 
-      const incident = detectIncident({ responses: r.responses, incidents: r.incidents }, verySlow);
-      expect(incident?.severity).toBe('critical');
+      const detection = detectIncident(
+        { responses: r.responses, incidents: r.incidents },
+        verySlow,
+      );
+      expect(detection?.incident.severity).toBe('critical');
     });
 
     it('does not alert at or below the 2x threshold', () => {
@@ -101,8 +111,43 @@ describe('monitor pipeline (core component)', () => {
       r.responses.insert(sampleResponse({ ok: false, latencyMs: 60_000, error: 'timeout' }));
       const slow = r.responses.insert(sampleResponse({ latencyMs: 250 }));
 
-      const incident = detectIncident({ responses: r.responses, incidents: r.incidents }, slow);
-      expect(incident?.baselineMs).toBeCloseTo(100);
+      const detection = detectIncident({ responses: r.responses, incidents: r.incidents }, slow);
+      expect(detection?.incident.baselineMs).toBeCloseTo(100);
+    });
+
+    it('groups a repeat anomaly within the window into one evolving incident', () => {
+      seedBaseline(MIN_BASELINE_SAMPLES, 100);
+      const first = r.responses.insert(sampleResponse({ latencyMs: 250 }));
+      const d1 = detectIncident({ responses: r.responses, incidents: r.incidents }, first)!;
+
+      const second = r.responses.insert(
+        sampleResponse({ latencyMs: 600, createdAt: Date.now() + 5 * 60_000 }),
+      );
+      const d2 = detectIncident({ responses: r.responses, incidents: r.incidents }, second)!;
+
+      expect(d2.isNew).toBe(false);
+      expect(d2.incident.id).toBe(d1.incident.id);
+      expect(d2.incident.occurrences).toBe(2);
+      expect(d2.incident.latencyMs).toBe(600); // keeps the worst observed latency
+      expect(d2.incident.severity).toBe('critical'); // escalates, never downgrades
+      expect(r.incidents.list({ limit: 10 })).toHaveLength(1); // no duplicate cards
+    });
+
+    it('opens a new incident once the grouping window has passed', () => {
+      seedBaseline(MIN_BASELINE_SAMPLES, 100);
+      const first = r.responses.insert(sampleResponse({ latencyMs: 250 }));
+      detectIncident({ responses: r.responses, incidents: r.incidents }, first);
+
+      const later = r.responses.insert(
+        sampleResponse({
+          latencyMs: 300,
+          createdAt: Date.now() + INCIDENT_GROUP_WINDOW_MS + 60_000,
+        }),
+      );
+      const d2 = detectIncident({ responses: r.responses, incidents: r.incidents }, later)!;
+
+      expect(d2.isNew).toBe(true);
+      expect(r.incidents.list({ limit: 10 })).toHaveLength(2);
     });
 
     it('broadcasts the incident and invokes the onIncident hook via runPing', async () => {

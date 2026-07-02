@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { MonitorResponse } from '../types';
 import { formatLatency, formatTime } from '../lib/api';
 
@@ -17,14 +18,58 @@ export function PayloadDrawer({
   response: MonitorResponse;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Modal dialog contract: move focus in on open, trap Tab inside, close on
+  // Escape, and restore focus to the trigger on close. aria-modal tells
+  // assistive tech the rest of the page is inert while the drawer is open.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusables = () =>
+      Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    (focusables()[0] ?? panel).focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-ink/40"
       onClick={onClose}
       role="dialog"
+      aria-modal="true"
       aria-label="Response detail"
     >
       <div
+        ref={panelRef}
         className="h-full w-full max-w-lg overflow-y-auto border-l border-line bg-paper p-6"
         onClick={(e) => e.stopPropagation()}
       >

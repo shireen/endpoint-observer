@@ -11,6 +11,12 @@ export const ANOMALY_WINDOW_MS = 24 * 3_600_000; // 24h rolling baseline
 export const MIN_BASELINE_SAMPLES = 5; // don't alert until we have a baseline
 export const ANOMALY_FACTOR = 2; // spec: response time > 2x average
 export const CRITICAL_FACTOR = 4;
+/**
+ * Anomalies within this window of an open incident's last occurrence fold
+ * into it (occurrences + last_seen_at) rather than opening a new one — a
+ * degraded half hour is one evolving incident, not a page of duplicates.
+ */
+export const INCIDENT_GROUP_WINDOW_MS = 30 * 60_000;
 
 export interface MonitorDeps {
   pingUrl: string;
@@ -44,17 +50,30 @@ export async function runPing(deps: MonitorDeps): Promise<ResponseRecord> {
   );
   deps.hub.broadcast('response', record);
 
-  const incident = detectIncident(deps, record);
-  if (incident) {
+  const detection = detectIncident(deps, record);
+  if (detection) {
     deps.logger.warn(
-      { incidentId: incident.id, latencyMs: incident.latencyMs, baselineMs: incident.baselineMs },
+      {
+        incidentId: detection.incident.id,
+        latencyMs: record.latencyMs,
+        occurrences: detection.incident.occurrences,
+        grouped: !detection.isNew,
+      },
       'latency anomaly detected',
     );
-    deps.hub.broadcast('incident', incident);
-    deps.onIncident?.(incident);
+    deps.hub.broadcast('incident', detection.incident);
+    // Only brand-new incidents get an LLM analysis — a grouped recurrence
+    // updates the existing card without spending another API call.
+    if (detection.isNew) deps.onIncident?.(detection.incident);
   }
 
   return record;
+}
+
+export interface IncidentDetection {
+  incident: IncidentRecord;
+  /** false when the anomaly was folded into an existing recent incident. */
+  isNew: boolean;
 }
 
 /**
@@ -62,11 +81,13 @@ export async function runPing(deps: MonitorDeps): Promise<ResponseRecord> {
  * average. Only successful pings are compared (failures already surface as
  * errors in the dashboard), and we require a minimum number of baseline
  * samples so the first few pings can't alert against a meaningless average.
+ * Anomalies close on the heels of an existing incident group into it instead
+ * of opening near-duplicates.
  */
 export function detectIncident(
   deps: Pick<MonitorDeps, 'responses' | 'incidents'>,
   record: ResponseRecord,
-): IncidentRecord | null {
+): IncidentDetection | null {
   if (!record.ok) return null;
 
   const { avg, count } = deps.responses.rollingAverage(ANOMALY_WINDOW_MS, record.id);
@@ -74,7 +95,21 @@ export function detectIncident(
   if (record.latencyMs <= ANOMALY_FACTOR * avg) return null;
 
   const severity = record.latencyMs > CRITICAL_FACTOR * avg ? 'critical' : 'warning';
-  return deps.incidents.create({
+
+  const latest = deps.incidents.latest();
+  if (latest && record.createdAt - latest.lastSeenAt <= INCIDENT_GROUP_WINDOW_MS) {
+    return {
+      incident: deps.incidents.recordRecurrence(
+        latest.id,
+        record.createdAt,
+        record.latencyMs,
+        severity,
+      ),
+      isNew: false,
+    };
+  }
+
+  const incident = deps.incidents.create({
     createdAt: record.createdAt,
     responseId: record.id,
     severity,
@@ -85,4 +120,5 @@ export function detectIncident(
       `Response time ${formatLatency(record.latencyMs)} was ${(record.latencyMs / avg).toFixed(1)}x the ` +
       `24h rolling average of ${formatLatency(avg)}`,
   });
+  return { incident, isNew: true };
 }

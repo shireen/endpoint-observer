@@ -16,8 +16,15 @@ export function useEventStream(): ConnectionState {
 
   useEffect(() => {
     const source = new EventSource(streamUrl());
+    let hadConnected = false;
 
-    source.onopen = () => setState('live');
+    source.onopen = () => {
+      // Anything broadcast while the connection was down is gone (SSE has no
+      // replay), so a REconnect refetches every query to reconcile the gap.
+      if (hadConnected) void queryClient.invalidateQueries();
+      hadConnected = true;
+      setState('live');
+    };
     source.onerror = () => setState('reconnecting');
 
     source.addEventListener('response', (event) => {

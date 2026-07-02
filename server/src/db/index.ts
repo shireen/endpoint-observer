@@ -28,9 +28,11 @@ CREATE TABLE IF NOT EXISTS incidents (
   latency_ms INTEGER NOT NULL,
   baseline_ms REAL NOT NULL,              -- rolling average at detection time
   summary TEXT NOT NULL,
-  analysis TEXT,                          -- root causes + recommendations (markdown)
+  analysis TEXT,                          -- evidence/hypotheses/investigation (markdown)
   analysis_source TEXT NOT NULL DEFAULT 'pending'
-    CHECK (analysis_source IN ('pending', 'llm', 'fallback'))
+    CHECK (analysis_source IN ('pending', 'llm', 'fallback')),
+  occurrences INTEGER NOT NULL DEFAULT 1, -- repeated anomalies group into one incident
+  last_seen_at INTEGER                    -- most recent grouped occurrence
 );
 CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents(created_at);
 
@@ -58,5 +60,23 @@ export function openDb(path: string): Db {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/**
+ * Additive migrations for databases created before a column existed —
+ * CREATE TABLE IF NOT EXISTS only covers fresh databases, and the production
+ * database persists on a volume across deploys.
+ */
+function migrate(db: Db): void {
+  const addColumnIfMissing = (table: string, column: string, ddl: string) => {
+    const columns = db.pragma(`table_info(${table})`) as { name: string }[];
+    if (!columns.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+    }
+  };
+  addColumnIfMissing('incidents', 'occurrences', 'occurrences INTEGER NOT NULL DEFAULT 1');
+  addColumnIfMissing('incidents', 'last_seen_at', 'last_seen_at INTEGER');
+  db.exec('UPDATE incidents SET last_seen_at = created_at WHERE last_seen_at IS NULL');
 }

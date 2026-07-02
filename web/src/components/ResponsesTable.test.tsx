@@ -115,4 +115,19 @@ describe('ResponsesTable', () => {
     await user.click(screen.getByLabelText('Close'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('drawer is a proper modal: moves focus in, closes on Escape, restores focus', async () => {
+    const user = userEvent.setup();
+    render(<ResponsesTable responses={[sample()]} loading={false} />);
+    const trigger = table().getByText('View payload');
+
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Response detail' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByLabelText('Close')).toHaveFocus(); // focus moved into the dialog
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus(); // focus restored to the trigger
+  });
 });

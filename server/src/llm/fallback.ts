@@ -43,15 +43,21 @@ export function fallbackChatAnswer(
 
 export function fallbackIncidentAnalysis(incident: IncidentRecord): string {
   const ratio = (incident.latencyMs / incident.baselineMs).toFixed(1);
+  // Mirrors the LLM report structure: evidence (facts only), hypotheses
+  // (labeled as such), and investigation steps appropriate to a single
+  // synthetic probe — no operational advice that assumes real traffic.
   return [
-    '## Potential root causes',
-    `- Transient slowness at the monitored endpoint (${incident.endpoint}) — observed latency was ${ratio}x the 24h baseline`,
-    '- Network congestion or routing change between this server and the endpoint',
-    '- Rate limiting or resource contention on the target service',
+    '## Observed evidence',
+    `- Response time ${incident.latencyMs}ms was ${ratio}x the 24h rolling average of ${Math.round(incident.baselineMs)}ms`,
+    `- Endpoint: ${incident.endpoint} · severity: ${incident.severity}`,
     '',
-    '## Recommendations',
-    '- Watch the next few checks: an isolated spike usually self-resolves',
-    '- If spikes repeat, compare timestamps against the target service status page',
+    '## Hypotheses',
+    '- The target service may have been transiently slow or degraded',
+    '- A network path change between this monitor and the endpoint could have added latency',
+    '',
+    '## Recommended investigation',
+    '- Watch the next few scheduled checks: an isolated spike usually self-resolves',
+    "- If it repeats, compare timestamps against the target service's status page",
     '',
     '_Automatic report (AI analysis unavailable at detection time)._',
   ].join('\n');

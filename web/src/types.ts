@@ -34,6 +34,9 @@ export interface Incident {
   summary: string;
   analysis: string | null;
   analysisSource: 'pending' | 'llm' | 'fallback';
+  /** Repeated anomalies group into one incident instead of duplicating. */
+  occurrences: number;
+  lastSeenAt: number;
 }
 
 export interface LlmUsageInfo {

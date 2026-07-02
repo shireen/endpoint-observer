@@ -20,7 +20,9 @@ function makeMessage(overrides: Partial<Anthropic.Message>): Anthropic.Message {
 /** Fake Anthropic client returning a scripted sequence of messages. */
 function fakeClient(script: Anthropic.Message[]) {
   let call = 0;
-  const create = vi.fn(async () => script[Math.min(call++, script.length - 1)]!);
+  const create = vi.fn(
+    async (_params: Anthropic.MessageCreateParams) => script[Math.min(call++, script.length - 1)]!,
+  );
   const stream = vi.fn((_params: Anthropic.MessageCreateParams) => {
     const message = script[Math.min(call++, script.length - 1)]!;
     return {
@@ -37,11 +39,18 @@ function fakeClient(script: Anthropic.Message[]) {
   };
 }
 
+const TEST_MONITOR = {
+  url: 'https://httpbin.org/anything',
+  cron: '*/5 * * * *',
+  timeoutMs: 10_000,
+};
+
 function service(client: Anthropic | undefined, callsPerHour = 20) {
   const r = repos(testDb());
   const insights = new InsightsService({
     apiKey: client ? 'test-key' : undefined,
     callsPerHour,
+    monitor: TEST_MONITOR,
     responses: r.responses,
     incidents: r.incidents,
     usage: r.llmUsage,
@@ -107,6 +116,24 @@ describe('InsightsService.chat', () => {
     expect(second.source).toBe('cache');
     expect(second.text).toBe('cached answer');
     expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates cached answers when new monitoring data arrives', async () => {
+    const answer = makeMessage({
+      content: [
+        { type: 'text', text: 'stale-able answer', citations: null },
+      ] as Anthropic.ContentBlock[],
+    });
+    const { client, stream } = fakeClient([answer]);
+    const { insights, responses } = service(client);
+    responses.insert(sampleResponse());
+
+    await insights.chat({ message: 'how are things?' });
+    responses.insert(sampleResponse()); // a new check lands — data changed
+
+    const second = await insights.chat({ message: 'how are things?' });
+    expect(second.source).toBe('llm'); // not served from cache
+    expect(stream).toHaveBeenCalledTimes(2);
   });
 
   it('falls back gracefully once the hourly quota is exhausted', async () => {
@@ -188,17 +215,18 @@ describe('InsightsService.analyzeIncident', () => {
     });
   }
 
-  it('stores an LLM-generated analysis', async () => {
+  it('stores an LLM-generated analysis from a grounded, evidence-first prompt', async () => {
     const report = makeMessage({
       content: [
-        { type: 'text', text: '## Potential root causes\n- x', citations: null },
+        { type: 'text', text: '## Observed evidence\n- x', citations: null },
       ] as Anthropic.ContentBlock[],
     });
-    const { client } = fakeClient([report]);
+    const { client, create, countTokens } = fakeClient([report]);
     const r = repos(testDb());
     const insights = new InsightsService({
       apiKey: 'test-key',
       callsPerHour: 20,
+      monitor: TEST_MONITOR,
       responses: r.responses,
       incidents: r.incidents,
       usage: r.llmUsage,
@@ -211,7 +239,25 @@ describe('InsightsService.analyzeIncident', () => {
 
     const updated = r.incidents.getById(incident.id)!;
     expect(updated.analysisSource).toBe('llm');
-    expect(updated.analysis).toContain('root causes');
+    expect(updated.analysis).toContain('Observed evidence');
+
+    // Token counting runs before the incident call too.
+    expect(countTokens).toHaveBeenCalledOnce();
+
+    // Grounding guards: the prompt states what the system is (one synthetic
+    // probe), demands evidence/hypothesis separation, forbids ops advice that
+    // assumes production traffic, and supplies the real monitor config so the
+    // model never guesses cadence or timeout.
+    const params = create.mock.calls[0]![0];
+    const system = String(params.system);
+    expect(system).toContain('## Observed evidence');
+    expect(system).toContain('## Hypotheses');
+    expect(system).toContain('## Recommended investigation');
+    expect(system).toContain('no circuit breakers, caching, retries, scaling');
+    const evidence = JSON.parse(params.messages[0]!.content as string);
+    expect(evidence.monitor.schedule_cron).toBe('*/5 * * * *');
+    expect(evidence.monitor.request_timeout_ms).toBe(10_000);
+    expect(evidence.checks_before_incident).toBeDefined();
   });
 
   it('stores a deterministic analysis when the LLM is unavailable', async () => {
@@ -222,6 +268,10 @@ describe('InsightsService.analyzeIncident', () => {
 
     const updated = r.incidents.getById(incident.id)!;
     expect(updated.analysisSource).toBe('fallback');
-    expect(updated.analysis).toContain('3.0x the 24h baseline');
+    expect(updated.analysis).toContain('3.0x the 24h rolling average');
+    // The fallback follows the same grounded structure as the LLM report.
+    expect(updated.analysis).toContain('## Observed evidence');
+    expect(updated.analysis).toContain('## Hypotheses');
+    expect(updated.analysis).toContain('## Recommended investigation');
   });
 });

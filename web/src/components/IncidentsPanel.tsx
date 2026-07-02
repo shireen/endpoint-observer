@@ -67,6 +67,11 @@ export function IncidentsPanel() {
             <SeverityBadge severity={incident.severity} />
             <span className="text-xs text-muted">{formatTime(incident.createdAt)}</span>
             <span className="text-xs text-muted/80">· {incident.endpoint}</span>
+            {incident.occurrences > 1 && (
+              <span className="rounded-md bg-gold/20 px-2 py-0.5 font-display text-xs font-semibold text-gold-deep">
+                ×{incident.occurrences} occurrences · last {formatTime(incident.lastSeenAt)}
+              </span>
+            )}
           </div>
           <p className="mb-3 text-sm font-medium text-ink">{incident.summary}</p>
           <AnalysisBlock incident={incident} />

@@ -18,6 +18,7 @@ describe('REST API', () => {
     const insights = new InsightsService({
       apiKey: undefined, // fallback mode — no external calls from tests
       callsPerHour: config.llmCallsPerHour,
+      monitor: { url: config.pingUrl, cron: config.pingCron, timeoutMs: config.pingTimeoutMs },
       responses: r.responses,
       incidents: r.incidents,
       usage: r.llmUsage,

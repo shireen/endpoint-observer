@@ -25,6 +25,7 @@ const insights = new InsightsService({
   apiKey: config.anthropicApiKey,
   model: process.env.LLM_MODEL,
   callsPerHour: config.llmCallsPerHour,
+  monitor: { url: config.pingUrl, cron: config.pingCron, timeoutMs: config.pingTimeoutMs },
   responses,
   incidents,
   usage: llmUsage,

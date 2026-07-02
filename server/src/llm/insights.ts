@@ -36,10 +36,18 @@ export interface ChatOptions {
   onText?: (delta: string) => void;
 }
 
+export interface MonitorContext {
+  url: string;
+  cron: string;
+  timeoutMs: number;
+}
+
 export interface InsightsDeps {
   apiKey: string | undefined;
   model?: string;
   callsPerHour: number;
+  /** What the monitor actually is/does — grounds LLM output in real config. */
+  monitor: MonitorContext;
   responses: ResponsesRepo;
   incidents: IncidentsRepo;
   usage: LlmUsageRepo;
@@ -75,8 +83,12 @@ export class InsightsService {
     const { message, history = [], onText } = options;
 
     // Cache only applies to fresh questions — history changes the meaning.
+    // The key includes the newest response id, so a cached answer can never
+    // outlive the data it described: the next ping invalidates it naturally.
+    const dataVersion = this.deps.responses.list({ limit: 1 })[0]?.id ?? 0;
+    const cacheKey = `v${dataVersion}|${ResponseCache.normalize(message)}`;
     if (history.length === 0) {
-      const cached = this.cache.get(message);
+      const cached = this.cache.get(cacheKey);
       if (cached !== undefined) {
         onText?.(cached);
         return { text: cached, source: 'cache' };
@@ -93,7 +105,7 @@ export class InsightsService {
 
     try {
       const text = await this.runAgentLoop(message, history, onText);
-      if (history.length === 0) this.cache.set(message, text);
+      if (history.length === 0) this.cache.set(cacheKey, text);
       return { text, source: 'llm' };
     } catch (err) {
       // canCall() above is only a fast-path peek — the authoritative gate is
@@ -223,12 +235,33 @@ export class InsightsService {
     const reservation = this.costs.tryReserve('incident', this.model);
     if (reservation === null) throw new QuotaExceededError();
 
-    const system =
-      'You write terse incident reports for an HTTP monitoring system. Output markdown with exactly two sections: "## Potential root causes" (3-4 bullets, most likely first) and "## Recommendations" (2-3 actionable bullets). No preamble.';
+    // Grounding matters more than polish here: the model must know what this
+    // system actually is (ONE synthetic probe, no user traffic) and must
+    // separate evidence from hypothesis, or it invents ~25-minute cadences
+    // and recommends circuit breakers for traffic that doesn't exist.
+    const system = `You write terse incident reports for Endpoint Observer, a synthetic monitor: ONE server-side probe sends a single small JSON request to one endpoint on a fixed schedule and records the response. There is no user traffic, no client pool, no load balancer, no cache — just this probe. The monitor's exact configuration is in the JSON evidence; never guess at cadence, timeout, or volume.
+
+Output markdown with exactly three sections:
+## Observed evidence — only facts present in the provided data (numbers, timestamps, counts). No inference.
+## Hypotheses — 2-3 possible explanations, each explicitly phrased as a hypothesis ("may", "could"), consistent with a single synthetic probe. Never state an unverified cause as fact.
+## Recommended investigation — 2-3 concrete next checks (e.g. compare with the target's status page, watch the next scheduled checks, inspect the surrounding checks in the data). Do NOT recommend operational changes that assume production traffic — no circuit breakers, caching, retries, scaling, or traffic shifting.
+
+No preamble.`;
+    const surrounding = this.deps.responses.list({
+      limit: 12,
+      from: incident.createdAt - 60 * 60_000,
+      to: incident.createdAt + 60_000,
+    });
     const messages: Anthropic.MessageParam[] = [
       {
         role: 'user',
         content: JSON.stringify({
+          monitor: {
+            endpoint: this.deps.monitor.url,
+            schedule_cron: this.deps.monitor.cron,
+            request_timeout_ms: this.deps.monitor.timeoutMs,
+            description: 'single synthetic HTTP POST per scheduled run; no user traffic',
+          },
           incident: {
             at: new Date(incident.createdAt).toISOString(),
             endpoint: incident.endpoint,
@@ -236,6 +269,13 @@ export class InsightsService {
             latency_ms: incident.latencyMs,
             baseline_24h_avg_ms: Math.round(incident.baselineMs),
           },
+          checks_before_incident: surrounding.map((r) => ({
+            at: new Date(r.createdAt).toISOString(),
+            status: r.statusCode,
+            latency_ms: r.latencyMs,
+            ok: r.ok,
+            error: r.error,
+          })),
           last_24h_stats: stats,
           recent_failures: recentFailures.map((r) => ({
             at: new Date(r.createdAt).toISOString(),
