@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatLatency, formatBytes, latencyToneClass } from './api';
+import {
+  formatLatency,
+  formatBytes,
+  latencyToneClass,
+  latencySeverity,
+  severityToneClass,
+} from './api';
 
 describe('formatLatency', () => {
   it('keeps sub-second values in milliseconds', () => {
@@ -30,6 +36,21 @@ describe('latencyToneClass', () => {
     expect(latencyToneClass(2999)).toBe('text-gold-deep');
     expect(latencyToneClass(3000)).toBe('text-danger'); // high at 3s
     expect(latencyToneClass(18507)).toBe('text-danger');
+  });
+});
+
+describe('latencySeverity', () => {
+  it('tiers at the 1s and 3s thresholds', () => {
+    expect(latencySeverity(999)).toBe('normal');
+    expect(latencySeverity(1000)).toBe('elevated');
+    expect(latencySeverity(2999)).toBe('elevated');
+    expect(latencySeverity(3000)).toBe('high');
+  });
+
+  it('stays consistent with the tone class', () => {
+    expect(severityToneClass(latencySeverity(500))).toBe('text-ink');
+    expect(severityToneClass(latencySeverity(1500))).toBe('text-gold-deep');
+    expect(severityToneClass(latencySeverity(5000))).toBe('text-danger');
   });
 });
 

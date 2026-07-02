@@ -117,13 +117,27 @@ export function formatLatency(ms: number): string {
 export const LATENCY_ELEVATED_MS = 1000;
 export const LATENCY_HIGH_MS = 3000;
 
+export type LatencySeverity = 'normal' | 'elevated' | 'high';
+
+export function latencySeverity(ms: number): LatencySeverity {
+  if (ms >= LATENCY_HIGH_MS) return 'high';
+  if (ms >= LATENCY_ELEVATED_MS) return 'elevated';
+  return 'normal';
+}
+
+/** Tailwind text-color class for a severity. */
+export function severityToneClass(severity: LatencySeverity): string {
+  if (severity === 'high') return 'text-danger';
+  if (severity === 'elevated') return 'text-gold-deep';
+  return 'text-ink';
+}
+
 /**
  * Tailwind text-color class for a latency value: neutral when healthy, gold
- * when elevated, red when high — so urgency is signalled by color (honest,
- * threshold-based) rather than by the raw magnitude of the number.
+ * when elevated, red when high. Urgency is signalled by color (honest,
+ * threshold-based) — paired with a shape icon so it's not color-only (WCAG
+ * 1.4.1).
  */
 export function latencyToneClass(ms: number): string {
-  if (ms >= LATENCY_HIGH_MS) return 'text-danger';
-  if (ms >= LATENCY_ELEVATED_MS) return 'text-gold-deep';
-  return 'text-ink';
+  return severityToneClass(latencySeverity(ms));
 }
