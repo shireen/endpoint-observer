@@ -12,8 +12,14 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchResponses(limit = 50): Promise<{ items: MonitorResponse[] }> {
-  return getJson(`/api/responses?limit=${limit}`);
+export function fetchResponses(
+  limit = 50,
+  opts: { before?: number; hours?: number } = {},
+): Promise<{ items: MonitorResponse[] }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (opts.before !== undefined) params.set('before', String(opts.before));
+  if (opts.hours !== undefined) params.set('hours', String(opts.hours));
+  return getJson(`/api/responses?${params}`);
 }
 
 export function fetchStats(hours = 24): Promise<Stats> {

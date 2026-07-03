@@ -173,6 +173,7 @@ Why not the others? **Vercel/Netlify** are serverless — a 5-minute in-process 
 - Auth + multi-tenancy, alerting integrations (email/Slack webhook on incident), configurable multiple endpoints to monitor.
 - Notifications to alert API owner(s) to address errors or timeouts.
 - Ask AI: persistent chat history — conversations currently vanish on tab switch or refresh; saving threads would let an operator leave and return to an investigation.
+- Link incidents to their checks (and back): an incident stores the offending check's id, but the UI doesn't connect them — closing that loop (incident card → payload drawer, flagged rows → incident) would remove the eyeball-matching of timestamps across tabs.
 
 ## Product framing
 
