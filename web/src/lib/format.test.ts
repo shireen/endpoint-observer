@@ -6,6 +6,7 @@ import {
   latencySeverity,
   severityToneClass,
 } from './api';
+import { DISPLAY_TIME_ZONE, formatTime } from './time';
 
 describe('formatLatency', () => {
   it('keeps sub-second values in milliseconds', () => {
@@ -59,5 +60,13 @@ describe('formatBytes', () => {
     expect(formatBytes(null)).toBe('—');
     expect(formatBytes(512)).toBe('512 B');
     expect(formatBytes(2048)).toBe('2.0 KB');
+  });
+});
+
+describe('formatTime', () => {
+  it('uses DST-aware Central Time even when the viewer is elsewhere', () => {
+    expect(DISPLAY_TIME_ZONE).toBe('America/Chicago');
+    expect(formatTime(Date.parse('2026-07-03T00:10:00.001Z'))).toBe('Jul 2, 2026, 7:10:00 PM CDT');
+    expect(formatTime(Date.parse('2026-01-03T00:10:00.001Z'))).toBe('Jan 2, 2026, 6:10:00 PM CST');
   });
 });

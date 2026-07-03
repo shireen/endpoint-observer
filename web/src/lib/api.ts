@@ -1,4 +1,5 @@
 import type { ChatMessage, Incident, LlmUsageInfo, MonitorResponse, Stats } from '../types';
+export { formatTime } from './time';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
@@ -78,16 +79,6 @@ export async function sendChat(
     }
   }
   return source;
-}
-
-export function formatTime(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 }
 
 export function formatBytes(bytes: number | null): string {

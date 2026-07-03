@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { ResponsesRepo } from '../db/responses.js';
 import type { IncidentsRepo } from '../db/incidents.js';
 import { analyzePayloadPatterns } from './payloadAnalysis.js';
+import { formatCentralTime } from './time.js';
 
 /**
  * The chat assistant queries monitoring data exclusively through these
@@ -73,12 +74,19 @@ export const CHAT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_responses_in_range',
     description:
-      'Get monitored requests between two timestamps (max 7 days apart), with an aggregate header. Use this for questions about a specific time — e.g. a spike "at 2pm" — with a window around that moment so the spike and its surroundings are both visible.',
+      'Get monitored requests between two timestamps (max 7 days apart), with aggregates and the five slowest rows. Use this for Central-Time calendar/clock questions such as "today" or a spike "at 2pm" so the requested period and its surrounding checks are explicit.',
     input_schema: {
       type: 'object',
       properties: {
-        start: { type: 'string', description: 'Range start, ISO 8601 (e.g. 2026-07-02T13:30:00Z)' },
-        end: { type: 'string', description: 'Range end, ISO 8601' },
+        start: {
+          type: 'string',
+          description:
+            'Range start as ISO 8601 with an explicit Z or UTC offset (e.g. 2026-07-02T13:30:00-05:00)',
+        },
+        end: {
+          type: 'string',
+          description: 'Range end as ISO 8601 with an explicit Z or UTC offset',
+        },
         only_failures: { type: 'boolean', description: 'Only return failed requests' },
       },
       required: ['start', 'end'],
@@ -121,7 +129,8 @@ function summarizeRow(r: {
 }) {
   return {
     id: r.id,
-    at: new Date(r.createdAt).toISOString(),
+    at_central: formatCentralTime(r.createdAt),
+    at_utc: new Date(r.createdAt).toISOString(),
     status: r.statusCode,
     latency_ms: r.latencyMs,
     ok: r.ok,
@@ -153,7 +162,8 @@ export function createToolExecutor(responses: ResponsesRepo, incidents: Incident
         return JSON.stringify(
           incidents.list({ limit: 20, hours: hoursArg(input.hours) }).map((i) => ({
             id: i.id,
-            at: new Date(i.createdAt).toISOString(),
+            at_central: formatCentralTime(i.createdAt),
+            at_utc: new Date(i.createdAt).toISOString(),
             severity: i.severity,
             latency_ms: i.latencyMs,
             baseline_ms: Math.round(i.baselineMs),
@@ -161,10 +171,20 @@ export function createToolExecutor(responses: ResponsesRepo, incidents: Incident
           })),
         );
       case 'get_responses_in_range': {
-        const from = Date.parse(String(input.start));
-        const to = Date.parse(String(input.end));
+        const start = String(input.start);
+        const end = String(input.end);
+        const hasZone = (value: string) => /T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+        if (!hasZone(start) || !hasZone(end)) {
+          return JSON.stringify({
+            error: 'start and end must include an explicit Z or UTC offset',
+          });
+        }
+        const from = Date.parse(start);
+        const to = Date.parse(end);
         if (Number.isNaN(from) || Number.isNaN(to)) {
-          return JSON.stringify({ error: 'start and end must be valid ISO 8601 timestamps' });
+          return JSON.stringify({
+            error: 'start and end must be valid ISO 8601 timestamps with a timezone',
+          });
         }
         if (to <= from) return JSON.stringify({ error: 'end must be after start' });
         if (to - from > 7 * 24 * 3_600_000) {
@@ -178,7 +198,12 @@ export function createToolExecutor(responses: ResponsesRepo, incidents: Incident
         });
         const okRows = rows.filter((r) => r.ok);
         return JSON.stringify({
-          range: { start: new Date(from).toISOString(), end: new Date(to).toISOString() },
+          range: {
+            start_central: formatCentralTime(from),
+            end_central: formatCentralTime(to),
+            start_utc: new Date(from).toISOString(),
+            end_utc: new Date(to).toISOString(),
+          },
           summary: {
             count: rows.length,
             ok: okRows.length,
@@ -190,6 +215,10 @@ export function createToolExecutor(responses: ResponsesRepo, incidents: Incident
             max_latency_ms: rows.length > 0 ? Math.max(...rows.map((r) => r.latencyMs)) : null,
             truncated: rows.length === 300,
           },
+          slowest_responses: [...rows]
+            .sort((a, b) => b.latencyMs - a.latencyMs)
+            .slice(0, 5)
+            .map(summarizeRow),
           responses: rows.slice(0, 40).map(summarizeRow),
         });
       }

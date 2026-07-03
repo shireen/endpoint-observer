@@ -6,6 +6,7 @@ import { ConnectionBadge } from './components/ConnectionBadge';
 import { Dashboard } from './components/Dashboard';
 import { IncidentsPanel } from './components/IncidentsPanel';
 import { ChatPanel } from './components/ChatPanel';
+import { DISPLAY_TIME_ZONE_LABEL } from './lib/time';
 
 const TABS = ['Dashboard', 'Incidents', 'Ask AI'] as const;
 type Tab = (typeof TABS)[number];
@@ -36,7 +37,12 @@ export default function App() {
               </p>
             </div>
           </div>
-          <ConnectionBadge state={connection} />
+          <div className="flex flex-col items-end gap-1">
+            <ConnectionBadge state={connection} />
+            <p className="font-display text-[10px] uppercase tracking-widest text-muted">
+              All times · {DISPLAY_TIME_ZONE_LABEL}
+            </p>
+          </div>
         </div>
       </header>
 

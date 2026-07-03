@@ -96,6 +96,10 @@ describe('InsightsService.chat', () => {
     const secondCall = stream.mock.calls[1]![0];
     const lastMessage = secondCall.messages[secondCall.messages.length - 1]!;
     expect(JSON.stringify(lastMessage.content)).toContain('tool_result');
+    const system = String(stream.mock.calls[0]![0].system);
+    expect(system).toContain('America/Chicago');
+    expect(system).toContain('Current reference time:');
+    expect(system).toContain('do not substitute a rolling last-N-hours window');
     // Both API calls were recorded for cost tracking.
     expect(llmUsage.summary().totalCalls).toBe(2);
   });
@@ -254,10 +258,14 @@ describe('InsightsService.analyzeIncident', () => {
     expect(system).toContain('## Hypotheses');
     expect(system).toContain('## Recommended investigation');
     expect(system).toContain('no circuit breakers, caching, retries, scaling');
+    expect(system).toContain('America/Chicago');
+    expect(system).toContain('Use the Central value');
     const evidence = JSON.parse(params.messages[0]!.content as string);
     expect(evidence.monitor.schedule_cron).toBe('*/5 * * * *');
     expect(evidence.monitor.request_timeout_ms).toBe(10_000);
     expect(evidence.checks_before_incident).toBeDefined();
+    expect(evidence.incident.at_central).toMatch(/C[DS]T$/);
+    expect(evidence.incident.at_utc).toMatch(/Z$/);
   });
 
   it('stores a deterministic analysis when the LLM is unavailable', async () => {

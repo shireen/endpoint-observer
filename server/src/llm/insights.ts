@@ -7,10 +7,15 @@ import { CostController, ResponseCache } from './costControl.js';
 import { CHAT_TOOLS, createToolExecutor, type ToolExecutor } from './tools.js';
 import { DEFAULT_MODEL } from './pricing.js';
 import { fallbackChatAnswer, fallbackIncidentAnalysis } from './fallback.js';
+import { formatCentralTime, timeContext } from './time.js';
 
-const CHAT_SYSTEM_PROMPT = `You are the monitoring assistant for an HTTP response monitor that pings httpbin.org/anything every 5 minutes and records status, latency, and payload data.
+function chatSystemPrompt(now = Date.now()): string {
+  return `You are the monitoring assistant for an HTTP response monitor that pings httpbin.org/anything every 5 minutes and records status, latency, and payload data.
 
-Answer questions about the monitoring data using the provided tools — never guess numbers; always fetch them. For questions about a specific time ("at 2pm", "this morning"), use get_responses_in_range with a window around that time so you can see the spike and its surroundings. For questions about payload contents or patterns, use analyze_payload_patterns and summarize the findings in plain language. Be concise and conversational. Report latencies in milliseconds and times in a human-readable form. If the data is insufficient to answer, say so plainly.`;
+${timeContext(now)}
+
+Answer questions about the monitoring data using the provided tools — never guess numbers; always fetch them. For calendar or clock questions ("today", "at 2pm", "this morning"), use get_responses_in_range with timezone-bearing boundaries; do not substitute a rolling last-N-hours window for a calendar day. Tool results provide both Central and UTC timestamps; report the Central value. For questions about payload contents or patterns, use analyze_payload_patterns and summarize the findings in plain language. Be concise and conversational. Report latencies in milliseconds. If the data is insufficient to answer, say so plainly.`;
+}
 
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_INPUT_TOKENS = 20_000; // guardrail: refuse absurdly large prompts before spending
@@ -135,6 +140,7 @@ export class InsightsService {
     ];
 
     let finalText = '';
+    const systemPrompt = chatSystemPrompt();
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       // Reserve a budget slot BEFORE the API call (synchronous, so concurrent
       // requests cannot overshoot the hourly cap). Losing the slot before the
@@ -150,7 +156,7 @@ export class InsightsService {
       // so re-check the guardrail per call, not just once per chat.
       const count = await client.messages.countTokens({
         model: this.model,
-        system: CHAT_SYSTEM_PROMPT,
+        system: systemPrompt,
         tools: CHAT_TOOLS,
         messages,
       });
@@ -162,7 +168,7 @@ export class InsightsService {
       const stream = client.messages.stream({
         model: this.model,
         max_tokens: CHAT_MAX_TOKENS,
-        system: CHAT_SYSTEM_PROMPT,
+        system: systemPrompt,
         tools: CHAT_TOOLS,
         messages,
       });
@@ -246,6 +252,9 @@ Output markdown with exactly three sections:
 ## Hypotheses — 2-3 possible explanations, each explicitly phrased as a hypothesis ("may", "could"), consistent with a single synthetic probe. Never state an unverified cause as fact.
 ## Recommended investigation — 2-3 concrete next checks (e.g. compare with the target's status page, watch the next scheduled checks, inspect the surrounding checks in the data). Do NOT recommend operational changes that assume production traffic — no circuit breakers, caching, retries, scaling, or traffic shifting.
 
+${timeContext()}
+All evidence timestamps provide both Central and UTC forms. Use the Central value when mentioning a time.
+
 No preamble.`;
     const surrounding = this.deps.responses.list({
       limit: 12,
@@ -263,14 +272,16 @@ No preamble.`;
             description: 'single synthetic HTTP POST per scheduled run; no user traffic',
           },
           incident: {
-            at: new Date(incident.createdAt).toISOString(),
+            at_central: formatCentralTime(incident.createdAt),
+            at_utc: new Date(incident.createdAt).toISOString(),
             endpoint: incident.endpoint,
             severity: incident.severity,
             latency_ms: incident.latencyMs,
             baseline_24h_avg_ms: Math.round(incident.baselineMs),
           },
           checks_before_incident: surrounding.map((r) => ({
-            at: new Date(r.createdAt).toISOString(),
+            at_central: formatCentralTime(r.createdAt),
+            at_utc: new Date(r.createdAt).toISOString(),
             status: r.statusCode,
             latency_ms: r.latencyMs,
             ok: r.ok,
@@ -278,7 +289,8 @@ No preamble.`;
           })),
           last_24h_stats: stats,
           recent_failures: recentFailures.map((r) => ({
-            at: new Date(r.createdAt).toISOString(),
+            at_central: formatCentralTime(r.createdAt),
+            at_utc: new Date(r.createdAt).toISOString(),
             status: r.statusCode,
             error: r.error,
           })),

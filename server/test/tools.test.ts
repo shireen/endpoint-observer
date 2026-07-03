@@ -12,10 +12,10 @@ describe('chat tool executor', () => {
   });
 
   describe('get_responses_in_range', () => {
-    const T0 = Date.parse('2026-07-02T14:00:00Z');
+    const T0 = Date.parse('2026-07-02T14:00:00-05:00');
 
     function seedAround2pm() {
-      // 13:50 normal · 14:00 spike · 14:10 normal · 15:30 outside the window
+      // Central Time: 13:50 normal · 14:00 spike · 14:10 normal · 15:30 outside
       r.responses.insert(sampleResponse({ createdAt: T0 - 10 * 60_000, latencyMs: 150 }));
       r.responses.insert(sampleResponse({ createdAt: T0, latencyMs: 9_000 }));
       r.responses.insert(sampleResponse({ createdAt: T0 + 10 * 60_000, latencyMs: 160 }));
@@ -26,14 +26,19 @@ describe('chat tool executor', () => {
       seedAround2pm();
       const result = JSON.parse(
         execute('get_responses_in_range', {
-          start: '2026-07-02T13:30:00Z',
-          end: '2026-07-02T14:30:00Z',
+          start: '2026-07-02T13:30:00-05:00',
+          end: '2026-07-02T14:30:00-05:00',
         }),
       );
 
       expect(result.summary.count).toBe(3); // the 15:30 row is excluded
       expect(result.summary.max_latency_ms).toBe(9_000);
       expect(result.responses).toHaveLength(3);
+      expect(result.range.start_central).toContain('1:30:00 PM CDT');
+      expect(result.range.start_utc).toBe('2026-07-02T18:30:00.000Z');
+      expect(result.slowest_responses[0].latency_ms).toBe(9_000);
+      expect(result.slowest_responses[0].at_central).toContain('2:00:00 PM CDT');
+      expect(result.slowest_responses[0].at_utc).toBe('2026-07-02T19:00:00.000Z');
     });
 
     it('rejects invalid or unordered timestamps with a readable error', () => {
@@ -58,6 +63,16 @@ describe('chat tool executor', () => {
         }),
       );
       expect(result.error).toContain('7 days');
+    });
+
+    it('rejects ambiguous timestamps without a timezone', () => {
+      const result = JSON.parse(
+        execute('get_responses_in_range', {
+          start: '2026-07-02T13:30:00',
+          end: '2026-07-02T14:30:00',
+        }),
+      );
+      expect(result.error).toContain('explicit Z or UTC offset');
     });
   });
 
