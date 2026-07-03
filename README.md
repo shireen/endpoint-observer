@@ -172,6 +172,7 @@ Why not the others? **Vercel/Netlify** are serverless — a 5-minute in-process 
 - Prompt caching on the Anthropic side (`cache_control` on the system prompt + tool definitions) — at current volume the fixed prefix is below Haiku's cacheable minimum for meaningful savings, but it's the first lever if chat volume grows.
 - Auth + multi-tenancy, alerting integrations (email/Slack webhook on incident), configurable multiple endpoints to monitor.
 - Notifications to alert API owner(s) to address errors or timeouts.
+- Ask AI: persistent chat history — conversations currently vanish on tab switch or refresh; saving threads would let an operator leave and return to an investigation.
 
 ## Product framing
 
